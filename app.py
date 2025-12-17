@@ -154,6 +154,31 @@ def send_simple_email(name, email, subject, message):
     return response.status_code, response.text
 
 
+def merge_datasets(gpx_df, csv_df):
+    """
+    Merges GPX and CSV data based on seconds_elapsed.
+    Cached because merge_asof is expensive to run on every slider move.
+    """
+    gpx_clean = gpx_df.dropna(subset=['seconds_elapsed']).copy()
+    csv_clean = csv_df.dropna(subset=['seconds_elapsed']).copy()
+    
+    gpx_clean['seconds_elapsed'] = gpx_clean['seconds_elapsed'].astype(int)
+    csv_clean['seconds_elapsed'] = csv_clean['seconds_elapsed'].astype(int)
+    
+    gpx_sorted = gpx_clean.sort_values('seconds_elapsed')
+    csv_sorted = csv_clean.sort_values('seconds_elapsed')
+
+    merged_df = pd.merge_asof(
+        csv_sorted, 
+        gpx_sorted[['seconds_elapsed', 'latitude', 'longitude']], 
+        on='seconds_elapsed', 
+        direction='nearest',
+        tolerance=5 
+    )
+    
+    return merged_df.dropna(subset=['latitude', 'longitude'])
+
+
 # --- Main App Logic ---
 
 # Create 3 columns: empty (1), logo (2), empty (1) to center the image
