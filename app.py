@@ -185,7 +185,7 @@ if uploaded_gpx is not None:
         st_folium(m, width=800, height=500)
 
         # Add Fullscreen Button
-        Fullscreen().add_to(m_compare)
+        Fullscreen().add_to(m)
 
         #View Raw GPX Data 
         with st.expander("📂 Raw GPX Data View (Click to expand)"):
