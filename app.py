@@ -466,6 +466,7 @@ with st.form("contact_form", clear_on_submit=True):
             else:
                 st.error(f"Failed to send. Status Code: {status}")
                 with st.expander("See Error Details"):
+                    st.text(response_text)
 
 
 #UNDER CONSTRUCTION
