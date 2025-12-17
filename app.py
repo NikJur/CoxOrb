@@ -221,13 +221,20 @@ if uploaded_csv is not None:
 if gpx_df is not None and csv_df is not None:
     st.markdown("---")
     st.subheader("Interactive Replay")
-    st.write("Move the slider to see stats and location at that specific moment.")
+    st.write("Move the map so you can see the entire course (we recommend picking the last point and zooming out as needed. \n
+    Now, move the slider to see stats and location at that specific moment. The map will stay where you last left it.")
 
-    try:
+try:
         # A. PREPARE DATA
         gpx_clean = gpx_df.dropna(subset=['seconds_elapsed']).copy()
         csv_clean = csv_df.dropna(subset=['seconds_elapsed']).copy()
         
+        # Ensure 'Distance' is numeric for the slider
+        if 'Distance' in csv_clean.columns:
+            csv_clean['Distance'] = pd.to_numeric(csv_clean['Distance'], errors='coerce').fillna(0)
+        else:
+            csv_clean['Distance'] = 0 # Fallback
+            
         gpx_clean['seconds_elapsed'] = gpx_clean['seconds_elapsed'].astype(int)
         csv_clean['seconds_elapsed'] = csv_clean['seconds_elapsed'].astype(int)
         
@@ -246,12 +253,17 @@ if gpx_df is not None and csv_df is not None:
         merged_df = merged_df.dropna(subset=['latitude', 'longitude'])
 
         if not merged_df.empty:
-            # C. The Slider
-            max_index = len(merged_df) - 1
-            selected_index = st.slider("Select Point / Stroke", 0, max_index, 0)
+            # C. SLIDER LOGIC (DISTANCE BASED)
+            # Find the max distance in the data
+            max_dist = int(merged_df['Distance'].max())
             
-            # Get current row
-            current_row = merged_df.iloc[selected_index]
+            # Create slider using Distance (Meters)
+            selected_dist = st.slider("Select Distance (Meters)", 0, max_dist, 0)
+            
+            # Find the row in the dataframe closest to the selected distance
+            # 'idxmin' returns the index of the closest match
+            row_idx = (merged_df['Distance'] - selected_dist).abs().idxmin()
+            current_row = merged_df.loc[row_idx]
             
             # D. Layout
             col_stats, col_map = st.columns([1, 3])
@@ -263,32 +275,28 @@ if gpx_df is not None and csv_df is not None:
                 dist = current_row.get('Distance', 0)
                 time_str = current_row.get('Elapsed Time', '00:00')
 
+                st.metric("Distance", f"{dist:.0f} m")
                 st.metric("Rate (SPM)", f"{rate}")
                 st.metric("Speed (m/s)", f"{speed}")
-                st.metric("Distance", f"{dist} m")
                 st.caption(f"Time: {time_str}")
 
             with col_map:
                 # --- MAP GENERATION (Persist User Zoom/Pan) ---
                 
                 # Default Logic (Auto-Center)
-                # We calculate this just in case we don't have a user state yet.
                 min_lat, max_lat = gpx_df['latitude'].min(), gpx_df['latitude'].max()
                 min_lon, max_lon = gpx_df['longitude'].min(), gpx_df['longitude'].max()
                 default_center = [(min_lat + max_lat) / 2, (min_lon + max_lon) / 2]
                 default_zoom = 14
                 
                 # Check Session State for "Last Known Position"
-                # If the map has been interacted with, 'interactive_map' will contain the 'center' and 'zoom'
                 map_state = st.session_state.get("interactive_map", {})
                 
                 if map_state and "center" in map_state and "zoom" in map_state:
-                    # Use the USER'S last position
                     center_to_use = [map_state["center"]["lat"], map_state["center"]["lng"]]
                     zoom_to_use = map_state["zoom"]
-                    should_fit_bounds = False # Don't force auto-fit if user has taken control
+                    should_fit_bounds = False 
                 else:
-                    # Use the AUTO calculated position
                     center_to_use = default_center
                     zoom_to_use = default_zoom
                     should_fit_bounds = True
@@ -309,6 +317,7 @@ if gpx_df is not None and csv_df is not None:
                 ).add_to(m_interactive)
 
                 # Path So Far (Blue)
+                # Filter based on the current TIME (derived from the distance selected)
                 current_time_sec = current_row['seconds_elapsed']
                 path_so_far = gpx_df[gpx_df['seconds_elapsed'] <= current_time_sec]
                 if not path_so_far.empty:
@@ -323,7 +332,6 @@ if gpx_df is not None and csv_df is not None:
                     location=boat_loc, radius=8, color="red", fill=True, fill_color="red"
                 ).add_to(m_interactive)
 
-                # Crucial: pass the key so state is saved
                 st_folium(m_interactive, width=800, height=500, key="interactive_map")
         else:
             st.warning("Could not link CSV and GPX data. Please check if the timestamps align.")
