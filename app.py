@@ -212,11 +212,103 @@ if uploaded_csv is not None:
     except Exception as e:
         st.error(f"Error processing CSV: {e}")
 
+# 4.  --- Interactive Replay Map (Combined Data) ---
 
-# 4. Feedback Part on the Bottom of the page:
+if gpx_df is not None and csv_df is not None:
+    st.markdown("---")
+    st.subheader("Interactive Replay")
+    st.write("Move the slider to see stats and location at that specific moment.")
+
+    try:
+        # A. Link the files
+        # We merge the GPX coordinates INTO the CSV based on 'seconds_elapsed'
+        # We sort both to ensure merge_asof works
+        gpx_sorted = gpx_df.sort_values('seconds_elapsed')
+        csv_sorted = csv_df.sort_values('seconds_elapsed')
+
+        # merge_asof finds the nearest GPX timestamp for every CSV row
+        merged_df = pd.merge_asof(
+            csv_sorted, 
+            gpx_sorted[['seconds_elapsed', 'latitude', 'longitude']], 
+            on='seconds_elapsed', 
+            direction='nearest',
+            tolerance=5 # Match if timestamps are within 5 seconds
+        )
+
+        # Remove rows where no GPS match was found (if any)
+        merged_df = merged_df.dropna(subset=['latitude', 'longitude'])
+
+        if not merged_df.empty:
+            # B. The Slider
+            # We slide through the INDEX of the merged dataframe (effectively sliding through strokes)
+            max_index = len(merged_df) - 1
+            selected_index = st.slider("Select Point / Stroke", 0, max_index, 0)
+            
+            # Get the specific row data
+            current_row = merged_df.iloc[selected_index]
+            
+            # C. Layout: Stats on the Left, Map on the Right
+            col_stats, col_map = st.columns([1, 3])
+            
+            with col_stats:
+                st.markdown("### Current Stats")
+                
+                # Extract values safely
+                rate = current_row.get('Rate', 0)
+                speed = current_row.get('Speed (m/s)', 0)
+                dist = current_row.get('Distance', 0)
+                time_str = current_row.get('Elapsed Time', '00:00')
+
+                # Display big metrics
+                st.metric("Rate (SPM)", f"{rate}")
+                st.metric("Speed (m/s)", f"{speed}")
+                st.metric("Distance", f"{dist} m")
+                st.caption(f"Time: {time_str}")
+
+            with col_map:
+                # Create a fresh map for the current point
+                # Center it exactly on the boat
+                boat_loc = [current_row['latitude'], current_row['longitude']]
+                m_interactive = folium.Map(location=boat_loc, zoom_start=16)
+
+                # 1. Draw the full gray path (Context)
+                folium.PolyLine(
+                    list(zip(gpx_df['latitude'], gpx_df['longitude'])), 
+                    color="gray", weight=2, opacity=0.5
+                ).add_to(m_interactive)
+
+                # 2. Draw the path ROWED SO FAR (Blue)
+                # We filter the GPX data to only show lines up to the current time
+                current_time_sec = current_row['seconds_elapsed']
+                path_so_far = gpx_df[gpx_df['seconds_elapsed'] <= current_time_sec]
+                if not path_so_far.empty:
+                    folium.PolyLine(
+                        list(zip(path_so_far['latitude'], path_so_far['longitude'])), 
+                        color="blue", weight=4, opacity=1
+                    ).add_to(m_interactive)
+
+                # 3. The Dot (Boat)
+                folium.CircleMarker(
+                    location=boat_loc,
+                    radius=8,
+                    color="red",
+                    fill=True,
+                    fill_color="red",
+                    popup=f"Rate: {rate}, Speed: {speed}"
+                ).add_to(m_interactive)
+
+                st_folium(m_interactive, width=800, height=500, key="interactive_map")
+        else:
+            st.warning("Could not link CSV and GPX data. Please check if the timestamps align.")
+            
+    except Exception as e:
+        st.error(f"Error in interactive section: {e}")
+
+
+# 5. Feedback Part on the Bottom of the page:
 st.markdown("---")  # Horizontal rule for visual separation
 
-# 1. Developer Credits
+# 5.1. Developer Credits
 st.markdown(
     """
     <div style='text-align: center; color: grey;'>
@@ -230,7 +322,7 @@ st.markdown(
 st.header("Contact & Feedback")
 st.write("Have suggestions? Send a message directly using the form below.")
 
-# 2. Contact Form
+# 5.2. Contact Form
 with st.form("contact_form", clear_on_submit=True):
     # Layout the input fields
     col1, col2 = st.columns(2)
