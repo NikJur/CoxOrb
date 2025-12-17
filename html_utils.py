@@ -95,40 +95,49 @@ def generate_audio_map_html(gpx_df, audio_bytes, audio_mime_type):
 
 def generate_client_side_replay(merged_df):
     """
-    Generates a lag-free, client-side interactive replay map with Fullscreen support
-    AND a synchronized performance chart.
+    Generates a lag-free, client-side interactive replay map.
+    REPLACES Speed with Split (s/500m).
     """
-    import json # Ensure json is imported
+    import json
     
     # 1. Prepare Data for JS
     export_data = []
     
-    # Handle column names flexibly
+    # Column selection
     rate_col = 'Rate' if 'Rate' in merged_df.columns else merged_df.columns[0]
-    speed_col = 'Speed (m/s)'
     dist_col = 'Distance'
     
-    chart_labels = [] # X-axis labels (Distance)
+    # PRIORITIZE SPLIT
+    if 'Split (s/500m)' in merged_df.columns:
+        split_col = 'Split (s/500m)'
+    else:
+        # Fallback if calculation failed (shouldn't happen with updated app.py)
+        split_col = 'Speed (m/s)' 
+
+    chart_labels = [] 
     data_rate = []
-    data_speed = []
+    data_split = []
 
     for index, row in merged_df.iterrows():
-        # Map Data
+        # Get values
+        dist_val = int(row.get(dist_col, 0))
+        rate_val = row.get(rate_col, 0)
+        split_val = row.get(split_col, 0) # This is in seconds (e.g., 135.5)
+
+        # Prepare Map/Stats Data
         export_data.append({
             'lat': row['latitude'],
             'lon': row['longitude'],
-            'rate': row.get(rate_col, 0),
-            'speed': row.get(speed_col, 0),
-            'dist': row.get(dist_col, 0),
+            'rate': rate_val,
+            'split': split_val,
+            'dist': dist_val,
             'time': str(row.get('Elapsed Time', '00:00')),
         })
         
-        # Chart Data
-        dist_val = int(row.get(dist_col, 0))
+        # Prepare Chart Data
         chart_labels.append(dist_val)
-        
-        data_rate.append(row.get(rate_col, 0))
-        data_speed.append(row.get(speed_col, 0))
+        data_rate.append(rate_val)
+        data_split.append(split_val)
         
     json_data = json.dumps(export_data)
     
@@ -148,11 +157,10 @@ def generate_client_side_replay(merged_df):
         <style>
             body {{ font-family: sans-serif; margin: 0; padding: 0; display: flex; flex-direction: column; height: 100vh; }}
             
-            /* Reduced heights to fit everything */
             #map {{ flex: 1; min-height: 250px; width: 100%; border-radius: 10px; }}
             
             .chart-container {{ 
-                height: 200px; /* Fixed height for chart */
+                height: 200px; 
                 width: 100%; 
                 margin-top: 10px;
                 flex-shrink: 0;
@@ -187,7 +195,7 @@ def generate_client_side_replay(merged_df):
         
         <div class="stats-grid">
             <div class="stat-box"><span class="stat-label">Rate (SPM)</span><span id="disp-rate" class="stat-value">--</span></div>
-            <div class="stat-box"><span class="stat-label">Speed (m/s)</span><span id="disp-speed" class="stat-value">--</span></div>
+            <div class="stat-box"><span class="stat-label">Split (/500m)</span><span id="disp-split" class="stat-value">--</span></div>
             <div class="stat-box"><span class="stat-label">Distance (m)</span><span id="disp-dist" class="stat-value">--</span></div>
             <div class="stat-box"><span class="stat-label">Time</span><span id="disp-time" class="stat-value">--</span></div>
         </div>
@@ -210,11 +218,20 @@ def generate_client_side_replay(merged_df):
         </div>
 
         <script>
+            // --- Helper: Format Seconds to MM:SS.s ---
+            function fmtSplit(seconds) {{
+                if (!seconds || seconds === 0) return "--";
+                let m = Math.floor(seconds / 60);
+                let s = (seconds % 60).toFixed(1);
+                if (s < 10) s = "0" + s;
+                return m + ":" + s;
+            }}
+
             // --- 1. Load Data ---
             var dataPoints = {json_data};
             var chartLabels = {chart_labels};
             var rateData = {data_rate};
-            var speedData = {data_speed};
+            var splitData = {data_split};
             
             var maxIdx = dataPoints.length - 1;
             var slider = document.getElementById("replaySlider");
@@ -248,23 +265,19 @@ def generate_client_side_replay(merged_df):
             // --- 3. Initialize Chart ---
             var ctx = document.getElementById('perfChart').getContext('2d');
             
-            // Custom Plugin to draw vertical line at current index
+            // Plugin for vertical line
             const verticalLinePlugin = {{
                 id: 'verticalLine',
                 defaults: {{ color: 'red', width: 2 }},
                 afterDraw: (chart, args, options) => {{
-                    if (chart.tooltip?._active?.length) return; 
-                    
-                    const idx = parseInt(slider.value); 
+                    if (chart.tooltip?._active?.length) return;
+                    const idx = parseInt(slider.value);
                     const meta = chart.getDatasetMeta(0);
-                    // Guard clause if data is missing
                     if (!meta.data[idx]) return;
-
                     const x = meta.data[idx].x;
                     const top = chart.chartArea.top;
                     const bottom = chart.chartArea.bottom;
                     const ctx = chart.ctx;
-
                     ctx.save();
                     ctx.beginPath();
                     ctx.moveTo(x, top);
@@ -290,8 +303,8 @@ def generate_client_side_replay(merged_df):
                             yAxisID: 'y'
                         }},
                         {{
-                            label: 'Speed (m/s)',
-                            data: speedData,
+                            label: 'Split (s/500m)',
+                            data: splitData,
                             borderColor: 'green',
                             borderWidth: 1.5,
                             pointRadius: 0,
@@ -303,7 +316,7 @@ def generate_client_side_replay(merged_df):
                     responsive: true,
                     maintainAspectRatio: false,
                     interaction: {{ mode: 'index', intersect: false }},
-                    animation: false, 
+                    animation: false,
                     scales: {{
                         x: {{ 
                             title: {{ display: true, text: 'Distance (m)' }},
@@ -319,13 +332,26 @@ def generate_client_side_replay(merged_df):
                             type: 'linear',
                             display: true,
                             position: 'right',
-                            grid: {{ drawOnChartArea: false }}, 
-                            title: {{ display: true, text: 'Speed' }}
+                            grid: {{ drawOnChartArea: false }},
+                            reverse: true,  // INVERTED AXIS: Lower split is higher/faster
+                            title: {{ display: true, text: 'Split' }}
                         }}
                     }},
                     plugins: {{
                         verticalLine: {{ color: 'red', width: 1.5 }},
-                        legend: {{ labels: {{ boxWidth: 10 }} }}
+                        legend: {{ labels: {{ boxWidth: 10 }} }},
+                        tooltip: {{
+                            callbacks: {{
+                                label: function(context) {{
+                                    let label = context.dataset.label || '';
+                                    if (label) {{ label += ': '; }}
+                                    if (context.dataset.label.includes("Split")) {{
+                                        return label + fmtSplit(context.parsed.y);
+                                    }}
+                                    return label + context.parsed.y;
+                                }}
+                            }}
+                        }}
                     }}
                 }},
                 plugins: [verticalLinePlugin]
@@ -335,16 +361,14 @@ def generate_client_side_replay(merged_df):
             function updateDisplay(idx) {{
                 var pt = dataPoints[idx];
                 
-                // Update Map
                 marker.setLatLng([pt.lat, pt.lon]);
                 
-                // Update Stats
                 document.getElementById("disp-rate").innerText = pt.rate;
-                document.getElementById("disp-speed").innerText = pt.speed;
+                // Format the split using the helper function
+                document.getElementById("disp-split").innerText = fmtSplit(pt.split);
                 document.getElementById("disp-dist").innerText = pt.dist;
                 document.getElementById("disp-time").innerText = pt.time;
                 
-                // Update Chart Vertical Line
                 myChart.draw();
             }}
 
