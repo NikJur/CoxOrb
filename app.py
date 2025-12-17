@@ -101,7 +101,7 @@ st.write("Upload your rowing data to view the route and analysis.")
 # 1. File Uploaders
 c1, c2 = st.columns(2)
 uploaded_gpx = c1.file_uploader("Upload GPX", type=['gpx'])
-uploaded_csv = c2.file_uploader("Upload CSV", type=['csv'])
+uploaded_csv = c2.file_uploader("Upload CSV (we recommend split over graph)", type=['csv'])
 
 # 2. Process and Plot GPX (Map)
 if uploaded_gpx is not None:
