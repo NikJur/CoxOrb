@@ -6,6 +6,27 @@ from streamlit_folium import st_folium
 import matplotlib.pyplot as plt
 import requests #for sending the feedback data to email service
 
+def parse_time_str(time_str):
+    """
+    Parses time strings like '00:15:30' or '15:30.5' into total seconds.
+    Used for the CSV 'Elapsed Time' column.
+    """
+    try:
+        if pd.isna(time_str): return 0
+        # If it's already a number (seconds), return it
+        if isinstance(time_str, (int, float)): return time_str
+        
+        parts = str(time_str).split(':')
+        if len(parts) == 3: # HH:MM:SS
+            h, m, s = parts
+            return int(h) * 3600 + int(m) * 60 + float(s)
+        elif len(parts) == 2: # MM:SS
+            m, s = parts
+            return int(m) * 60 + float(s)
+        return 0
+    except:
+        return 0
+
 def parse_gpx(file_buffer):
     """
     Parses a GPX file buffer and returns a DataFrame of coordinates. + add "seconds_elapsed" column to compare with csv files
@@ -168,6 +189,13 @@ if uploaded_csv is not None:
         # Load CSV into Pandas DataFrame
         # header=1 tells pandas to ignore the first row ("COXORB Performance Data...") and use the second row as the actual column headers.
         df = pd.read_csv(uploaded_csv, header=1)
+
+        # Clean column names
+        df.columns = [c.strip() for c in df.columns]
+
+        #Convert 'Elapsed Time' string to 'seconds_elapsed' float ---
+        if 'Elapsed Time' in df.columns:
+            df['seconds_elapsed'] = df['Elapsed Time'].apply(parse_time_str)
         
         # Display raw data snapshot
         with st.expander("📂 Raw CSV Data View (Click to expand)"):
