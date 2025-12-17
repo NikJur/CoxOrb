@@ -221,7 +221,7 @@ if uploaded_csv is not None:
 if gpx_df is not None and csv_df is not None:
     st.markdown("---")
     st.subheader("Interactive Replay")
-    st.write("Move the map so you can see the entire course (we recommend picking the last point and zooming out as needed. Now, move the slider to see stats and location at that specific moment. The map will stay where you last left it.")
+    st.write("Move the map to frame the course. Drag the slider to replay. The map stays where you leave it.")
 
     try:
         # A. PREPARE DATA
@@ -246,7 +246,7 @@ if gpx_df is not None and csv_df is not None:
         merged_df = merged_df.dropna(subset=['latitude', 'longitude'])
 
         if not merged_df.empty:
-            # C. The Slider
+            # C. The Slider (Based on Index for smooth playback)
             max_index = len(merged_df) - 1
             selected_index = st.slider("Select Point / Stroke", 0, max_index, 0)
             
@@ -269,61 +269,59 @@ if gpx_df is not None and csv_df is not None:
                 st.caption(f"Time: {time_str}")
 
             with col_map:
-                # --- MAP GENERATION (Persist User Zoom/Pan) ---
+                # --- MAP GENERATION ---
                 
-                # Default Logic (Auto-Center)
-                # We calculate this just in case we don't have a user state yet.
+                # 1. Determine Zoom/Center (Persist User State)
                 min_lat, max_lat = gpx_df['latitude'].min(), gpx_df['latitude'].max()
                 min_lon, max_lon = gpx_df['longitude'].min(), gpx_df['longitude'].max()
                 default_center = [(min_lat + max_lat) / 2, (min_lon + max_lon) / 2]
                 default_zoom = 14
                 
-                # Check Session State for "Last Known Position"
-                # If the map has been interacted with, 'interactive_map' will contain the 'center' and 'zoom'
                 map_state = st.session_state.get("interactive_map", {})
                 
                 if map_state and "center" in map_state and "zoom" in map_state:
-                    # Use the USER'S last position
                     center_to_use = [map_state["center"]["lat"], map_state["center"]["lng"]]
                     zoom_to_use = map_state["zoom"]
-                    should_fit_bounds = False # Don't force auto-fit if user has taken control
+                    should_fit_bounds = False 
                 else:
-                    # Use the AUTO calculated position
                     center_to_use = default_center
                     zoom_to_use = default_zoom
                     should_fit_bounds = True
                 
-                # Create Map
                 m_interactive = folium.Map(location=center_to_use, zoom_start=zoom_to_use)
 
-                # Only auto-fit bounds on the very first load
                 if should_fit_bounds:
                      sw = [min_lat, min_lon]
                      ne = [max_lat, max_lon]
                      m_interactive.fit_bounds([sw, ne])
 
-                # Full Path (Gray)
+                # 2. Draw Full Route in RED (This represents "Untravelled" background)
                 folium.PolyLine(
                     list(zip(gpx_df['latitude'], gpx_df['longitude'])), 
-                    color="gray", weight=2, opacity=0.5
+                    color="red", weight=3, opacity=0.6, tooltip="Untravelled"
                 ).add_to(m_interactive)
 
-                # Path So Far (Blue)
+                # 3. Draw Travelled Route in BLUE (Overlays the red line)
                 current_time_sec = current_row['seconds_elapsed']
                 path_so_far = gpx_df[gpx_df['seconds_elapsed'] <= current_time_sec]
                 if not path_so_far.empty:
                     folium.PolyLine(
                         list(zip(path_so_far['latitude'], path_so_far['longitude'])), 
-                        color="blue", weight=4, opacity=1
+                        color="blue", weight=4, opacity=1, tooltip="Travelled"
                     ).add_to(m_interactive)
 
-                # Boat Dot
+                # 4. Boat Dot (Added black border so it pops against the red line)
                 boat_loc = [current_row['latitude'], current_row['longitude']]
                 folium.CircleMarker(
-                    location=boat_loc, radius=8, color="red", fill=True, fill_color="red"
+                    location=boat_loc, 
+                    radius=8, 
+                    color="black",      # Stroke color (contrast)
+                    weight=1,           # Stroke width
+                    fill=True, 
+                    fill_color="red",   # Fill color
+                    fill_opacity=1
                 ).add_to(m_interactive)
 
-                # Crucial: pass the key so state is saved
                 st_folium(m_interactive, width=800, height=500, key="interactive_map")
         else:
             st.warning("Could not link CSV and GPX data. Please check if the timestamps align.")
