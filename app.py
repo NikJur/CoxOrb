@@ -98,7 +98,7 @@ def plot_metrics(df):
     cols_to_plot = [c for c in wanted_cols if c in df.columns]
     
     if cols_to_plot:
-        st.subheader("Performance Metrics")
+        st.subheader("Performance Metrics (Static Plot)")
         
         # If 'Distance' exists, set it as the index (X-axis)
         if 'Distance' in df.columns:
