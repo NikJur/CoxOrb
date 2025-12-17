@@ -100,13 +100,9 @@ def plot_metrics(df):
     #1 Clean column names (remove extra spaces)
     df.columns = [c.strip() for c in df.columns]
 
-    # 1/2. Rename 'Speed (m/s)' to 'Split (m/s)' if it exists
-    if 'Speed (m/s)' in df.columns:
-        df.rename(columns={'Speed (m/s)': 'Split (m/s)'}, inplace=True)
-
     #2 Define the exact columns we want to plot based on your file format
     #file format: Distance, Elapsed Time, Stroke Count, Rate, Check, Speed (mm:ss/500m), Speed (m/s), Distance/Stroke
-    wanted_cols = ['Rate', 'Split (m/s)', 'Distance/Stroke', 'Check']
+    wanted_cols = ['Rate', 'Speed (m/s)', 'Distance/Stroke', 'Check']
     
     #3 Filter for columns that actually exist in the file
     cols_to_plot = [c for c in wanted_cols if c in df.columns]
