@@ -312,12 +312,32 @@ if gpx_df is not None and uploaded_audio is not None:
     st.write("Loading audio player and map sync...")
     
     if 'seconds_elapsed' in gpx_df.columns:
-        # Calls the function from utils.py
-        audio_html = generate_audio_map_html(gpx_df, uploaded_audio.getvalue(), uploaded_audio.type)
-        components.html(audio_html, height=550)
+        # Prepare the data for Audio Sync
+        if csv_df is not None:
+            # If CSV exists, merge stats ONTO the GPX data.
+            # We use merge_asof with GPX as the left table to keep the high-frequency map points (1Hz)
+            # while pulling in the closest available stats from the CSV.
+            
+            # Ensure types match
+            gpx_df['seconds_elapsed'] = gpx_df['seconds_elapsed'].astype(int)
+            csv_df['seconds_elapsed'] = csv_df['seconds_elapsed'].astype(int)
+            
+            audio_data = pd.merge_asof(
+                gpx_df.sort_values('seconds_elapsed'),
+                csv_df.sort_values('seconds_elapsed'),
+                on='seconds_elapsed',
+                direction='nearest',
+                tolerance=5
+            )
+        else:
+            # If no CSV, just use the GPX data (stats will show as "--")
+            audio_data = gpx_df
+
+        # Generate HTML
+        audio_html = generate_audio_map_html(audio_data, uploaded_audio.getvalue(), uploaded_audio.type)
+        components.html(audio_html, height=600) # Increased height to fit stats + map + player
     else:
         st.error("GPX data does not have time info required for sync.")
-
 
 # 5. Compare Two GPX Lines ---
 
