@@ -102,7 +102,7 @@ def plot_metrics(df):
 
     #2 Define the exact columns we want to plot based on your file format
     #file format: Distance, Elapsed Time, Stroke Count, Rate, Check, Speed (mm:ss/500m), Speed (m/s), Distance/Stroke
-    wanted_cols = ['Rate', 'Speed (m/s)', 'Distance/Stroke', 'Check']
+    wanted_cols = ['Rate', 'Speed (m/s)', 'Distance/Stroke', 'Check', 'Split (s/500m)']
     
     #3 Filter for columns that actually exist in the file
     cols_to_plot = [c for c in wanted_cols if c in df.columns]
@@ -258,6 +258,12 @@ if uploaded_csv is not None:
         #Convert 'Elapsed Time' string to 'seconds_elapsed' float ---
         if 'Elapsed Time' in csv_df.columns:
             csv_df['seconds_elapsed'] = csv_df['Elapsed Time'].apply(parse_time_str)
+
+        #convert speed to splits
+        if 'Speed (m/s)' in csv_df.columns:
+        #Formula: 500 / Speed (m/s) = Seconds per 500m
+        #use a lambda to handle division by zero or empty values safely
+        csv_df['Split (s/500m)'] = csv_df['Speed (m/s)'].apply(lambda x: 500/x if (pd.notnull(x) and x > 0) else 0)
         
         # Display raw data snapshot
         with st.expander("📂 Raw CSV Data View (Click to expand)"):
