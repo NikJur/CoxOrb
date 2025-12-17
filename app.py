@@ -154,7 +154,7 @@ def send_simple_email(name, email, subject, message):
 
 # --- Main App Logic ---
 st.set_page_config(layout="wide")
-st.image("logo.png", use_column_width=True) #add logo as banner
+st.image("logo.png", width=1200) #add logo as banner
 
 st.title("CoxOrb Data Visualiser")
     
