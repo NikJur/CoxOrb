@@ -98,22 +98,19 @@ def generate_client_side_replay(merged_df):
     Generates a lag-free, client-side interactive replay map with Fullscreen support
     AND a synchronized performance chart.
     """
+    import json # Ensure json is imported
     
     # 1. Prepare Data for JS
-    # We create lists for the chart data to make it easy to inject
     export_data = []
     
     # Handle column names flexibly
-    rate_col = 'Rate' if 'Rate' in merged_df.columns else merged_df.columns[0] # Fallback
+    rate_col = 'Rate' if 'Rate' in merged_df.columns else merged_df.columns[0]
     speed_col = 'Speed (m/s)'
     dist_col = 'Distance'
-    dps_col = 'Distance/Stroke' 
-    if 'Dist/Stroke' in merged_df.columns: dps_col = 'Dist/Stroke'
     
     chart_labels = [] # X-axis labels (Distance)
     data_rate = []
     data_speed = []
-    data_dps = []
 
     for index, row in merged_df.iterrows():
         # Map Data
@@ -127,13 +124,11 @@ def generate_client_side_replay(merged_df):
         })
         
         # Chart Data
-        # We use Distance as the X-axis label, rounding to whole numbers
         dist_val = int(row.get(dist_col, 0))
         chart_labels.append(dist_val)
         
         data_rate.append(row.get(rate_col, 0))
         data_speed.append(row.get(speed_col, 0))
-        data_dps.append(row.get(dps_col, 0))
         
     json_data = json.dumps(export_data)
     
@@ -151,29 +146,39 @@ def generate_client_side_replay(merged_df):
         <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
         <style>
-            body {{ font-family: sans-serif; margin: 0; padding: 0; }}
+            body {{ font-family: sans-serif; margin: 0; padding: 0; display: flex; flex-direction: column; height: 100vh; }}
             
-            #map {{ height: 350px; width: 100%; border-radius: 10px; }}
+            /* Reduced heights to fit everything */
+            #map {{ flex: 1; min-height: 250px; width: 100%; border-radius: 10px; }}
             
             .chart-container {{ 
-                position: relative; 
-                height: 200px; 
+                height: 150px; /* Fixed height for chart */
                 width: 100%; 
-                margin-top: 15px;
+                margin-top: 10px;
+                flex-shrink: 0;
             }}
 
             .stats-grid {{ 
                 display: grid; 
                 grid-template-columns: repeat(4, 1fr); 
-                gap: 10px; 
-                margin-bottom: 10px; 
+                gap: 5px; 
+                margin-bottom: 5px; 
                 text-align: center;
+                flex-shrink: 0;
             }}
             .stat-box {{ background: white; padding: 5px; border-radius: 5px; border: 1px solid #ddd; }}
-            .stat-label {{ font-size: 11px; color: #666; display: block; }}
-            .stat-value {{ font-size: 16px; font-weight: bold; color: #333; }}
+            .stat-label {{ font-size: 10px; color: #666; display: block; }}
+            .stat-value {{ font-size: 14px; font-weight: bold; color: #333; }}
 
-            .controls {{ margin-top: 10px; padding: 10px; background: #f9f9f9; border-radius: 10px; }}
+            .controls {{ 
+                margin-top: 5px; 
+                padding: 10px; 
+                background: #f9f9f9; 
+                border-radius: 10px; 
+                flex-shrink: 0;
+                position: sticky; 
+                bottom: 0;
+            }}
             .slider-container {{ width: 100%; display: flex; align-items: center; gap: 10px; }}
             input[type=range] {{ width: 100%; cursor: pointer; }}
         </style>
@@ -210,7 +215,6 @@ def generate_client_side_replay(merged_df):
             var chartLabels = {chart_labels};
             var rateData = {data_rate};
             var speedData = {data_speed};
-            var dpsData = {data_dps};
             
             var maxIdx = dataPoints.length - 1;
             var slider = document.getElementById("replaySlider");
@@ -249,10 +253,13 @@ def generate_client_side_replay(merged_df):
                 id: 'verticalLine',
                 defaults: {{ color: 'red', width: 2 }},
                 afterDraw: (chart, args, options) => {{
-                    if (chart.tooltip?._active?.length) return; // Don't draw if tooltip active (optional)
+                    if (chart.tooltip?._active?.length) return; 
                     
-                    const idx = parseInt(slider.value); // Get current slider value
+                    const idx = parseInt(slider.value); 
                     const meta = chart.getDatasetMeta(0);
+                    // Guard clause if data is missing
+                    if (!meta.data[idx]) return;
+
                     const x = meta.data[idx].x;
                     const top = chart.chartArea.top;
                     const bottom = chart.chartArea.bottom;
@@ -289,15 +296,6 @@ def generate_client_side_replay(merged_df):
                             borderWidth: 1.5,
                             pointRadius: 0,
                             yAxisID: 'y1'
-                        }},
-                        {{
-                            label: 'Dist/Stroke',
-                            data: dpsData,
-                            borderColor: 'purple',
-                            borderWidth: 1.5,
-                            pointRadius: 0,
-                            yAxisID: 'y1', // Share right axis with speed
-                            hidden: true // Hide by default to avoid clutter
                         }}
                     ]
                 }},
@@ -305,7 +303,7 @@ def generate_client_side_replay(merged_df):
                     responsive: true,
                     maintainAspectRatio: false,
                     interaction: {{ mode: 'index', intersect: false }},
-                    animation: false, // Disable animation for performance
+                    animation: false, 
                     scales: {{
                         x: {{ 
                             title: {{ display: true, text: 'Distance (m)' }},
@@ -321,12 +319,13 @@ def generate_client_side_replay(merged_df):
                             type: 'linear',
                             display: true,
                             position: 'right',
-                            grid: {{ drawOnChartArea: false }}, // only want the grid lines for one axis
-                            title: {{ display: true, text: 'Speed / DPS' }}
+                            grid: {{ drawOnChartArea: false }}, 
+                            title: {{ display: true, text: 'Speed' }}
                         }}
                     }},
                     plugins: {{
-                        verticalLine: {{ color: 'red', width: 1.5 }}
+                        verticalLine: {{ color: 'red', width: 1.5 }},
+                        legend: {{ labels: {{ boxWidth: 10 }} }}
                     }}
                 }},
                 plugins: [verticalLinePlugin]
@@ -346,11 +345,9 @@ def generate_client_side_replay(merged_df):
                 document.getElementById("disp-time").innerText = pt.time;
                 
                 // Update Chart Vertical Line
-                // We just need to trigger a re-render of the chart so the plugin draws the line at new slider pos
                 myChart.draw();
             }}
 
-            // Start
             updateDisplay(0);
 
             slider.oninput = function() {{
