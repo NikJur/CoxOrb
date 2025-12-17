@@ -115,8 +115,8 @@ def plot_metrics(df):
     # Default to showing all available metrics
     cols_to_plot = st.multiselect(
         "Select metrics to plot:", 
-        options=available_cols, 
-        default=available_cols
+        options=cols_to_plot, 
+        default=cols_to_plot
     )
 
     if cols_to_plot:
