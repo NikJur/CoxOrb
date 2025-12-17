@@ -2,17 +2,50 @@ import json
 import pandas as pd
 import base64
 
-def generate_audio_map_html(gpx_df, audio_bytes, audio_mime_type):
+def generate_audio_map_html(input_df, audio_bytes, audio_mime_type):
     """
-    Creates a standalone HTML component with Leaflet.js and an audio player.
-    The JS logic handles syncing the marker position to the audio timestamp.
+    Creates a standalone HTML component with Leaflet.js, an audio player,
+    and a synchronized stats dashboard.
     """
+    import json
+    import base64
+    import pandas as pd
+
     # 1. Prepare Data for JS
-    # only need lat, lon, and seconds to keep the payload light
-    route_data = gpx_df[['latitude', 'longitude', 'seconds_elapsed']].to_dict(orient='records')
-    json_data = json.dumps(route_data)
+    export_data = []
     
-    # 2. Encode Audio to Base64 to embed in HTML
+    # Check which columns are available
+    has_stats = 'Rate' in input_df.columns
+    
+    # Handle column names flexibly
+    rate_col = 'Rate' if 'Rate' in input_df.columns else 'rate_placeholder'
+    split_col = 'Split (s/500m)' if 'Split (s/500m)' in input_df.columns else 'Speed (m/s)'
+    dist_col = 'Distance' if 'Distance' in input_df.columns else 'dist_placeholder'
+
+    for index, row in input_df.iterrows():
+        # Basic Map Data
+        point_data = {
+            'lat': row['latitude'],
+            'lon': row['longitude'],
+            'seconds': row['seconds_elapsed'], # Crucial for sync
+            'time': str(row.get('Elapsed Time', '00:00'))
+        }
+        
+        # Add Stats if they exist (default to 0 or empty)
+        if has_stats:
+            point_data['rate'] = row.get(rate_col, 0)
+            point_data['split'] = row.get(split_col, 0)
+            point_data['dist'] = int(row.get(dist_col, 0))
+        else:
+            point_data['rate'] = "--"
+            point_data['split'] = 0
+            point_data['dist'] = "--"
+            
+        export_data.append(point_data)
+        
+    json_data = json.dumps(export_data)
+    
+    # 2. Encode Audio
     b64_audio = base64.b64encode(audio_bytes).decode()
     
     # 3. Define HTML Template
@@ -22,27 +55,61 @@ def generate_audio_map_html(gpx_df, audio_bytes, audio_mime_type):
     <head>
         <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
         <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+        
         <style>
+            body {{ font-family: sans-serif; margin: 0; padding: 0; display: flex; flex-direction: column; }}
+            
+            /* Stats Grid */
+            .stats-grid {{ 
+                display: grid; 
+                grid-template-columns: repeat(4, 1fr); 
+                gap: 5px; 
+                margin-bottom: 10px; 
+                text-align: center;
+            }}
+            .stat-box {{ background: white; padding: 5px; border-radius: 5px; border: 1px solid #ddd; }}
+            .stat-label {{ font-size: 10px; color: #666; display: block; }}
+            .stat-value {{ font-size: 16px; font-weight: bold; color: #333; }}
+
             #map {{ height: 400px; width: 100%; border-radius: 10px; margin-bottom: 10px; }}
-            audio {{ width: 100%; margin-top: 10px; }}
-            .info-box {{ font-family: sans-serif; margin-bottom: 5px; color: #555; font-size: 14px; text-align: center; }}
+            audio {{ width: 100%; margin-top: 5px; }}
+            .info-box {{ margin-bottom: 5px; color: #555; font-size: 12px; text-align: center; }}
         </style>
     </head>
     <body>
-        <div class="info-box">Press Play to see the marker move along the route in sync with the audio.</div>
+        
+        <div class="stats-grid">
+            <div class="stat-box"><span class="stat-label">Rate (SPM)</span><span id="disp-rate" class="stat-value">--</span></div>
+            <div class="stat-box"><span class="stat-label">Split (/500m)</span><span id="disp-split" class="stat-value">--</span></div>
+            <div class="stat-box"><span class="stat-label">Distance (m)</span><span id="disp-dist" class="stat-value">--</span></div>
+            <div class="stat-box"><span class="stat-label">Time</span><span id="disp-time" class="stat-value">--</span></div>
+        </div>
+
         <div id="map"></div>
+        
+        <div class="info-box">Audio syncs automatically with the map position.</div>
+        
         <audio id="audioPlayer" controls>
             <source src="data:{audio_mime_type};base64,{b64_audio}" type="{audio_mime_type}">
             Your browser does not support the audio element.
         </audio>
 
         <script>
+            // --- Helper: Format Seconds to MM:SS.s ---
+            function fmtSplit(seconds) {{
+                if (!seconds || seconds === 0) return "--";
+                let m = Math.floor(seconds / 60);
+                let s = (seconds % 60).toFixed(1);
+                if (s < 10) s = "0" + s;
+                return m + ":" + s;
+            }}
+
             // 1. Load Data
             var routePoints = {json_data};
             
             // 2. Initialize Map
-            var startLat = routePoints[0].latitude;
-            var startLon = routePoints[0].longitude;
+            var startLat = routePoints[0].lat;
+            var startLon = routePoints[0].lon;
             var map = L.map('map').setView([startLat, startLon], 14);
 
             L.tileLayer('https://{{s}}.tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png', {{
@@ -50,10 +117,9 @@ def generate_audio_map_html(gpx_df, audio_bytes, audio_mime_type):
                 attribution: '© OpenStreetMap'
             }}).addTo(map);
 
-            // 3. Draw Route (Grey Background)
-            var latlngs = routePoints.map(p => [p.latitude, p.longitude]);
-            var polyline = L.polyline(latlngs, {{color: 'grey', weight: 6, opacity: 0.8}}).addTo(map);
-            
+            // 3. Draw Route (Thicker Grey Line)
+            var latlngs = routePoints.map(p => [p.lat, p.lon]);
+            var polyline = L.polyline(latlngs, {{color: 'grey', weight: 8, opacity: 0.6}}).addTo(map);
             map.fitBounds(polyline.getBounds());
 
             // 4. Create Boat Marker
@@ -68,30 +134,45 @@ def generate_audio_map_html(gpx_df, audio_bytes, audio_mime_type):
             // 5. Audio Sync Logic
             var audio = document.getElementById("audioPlayer");
             
+            // Optimization: Keep track of last index to avoid searching from 0 every time
+            var lastIdx = 0;
+
             audio.ontimeupdate = function() {{
                 var currentTime = audio.currentTime;
                 
-                // Find the closest point in data based on time
-                var closestPoint = routePoints[0];
-                var minDiff = Math.abs(currentTime - routePoints[0].seconds_elapsed);
+                // Find closest point (Simple linear search from last known position)
+                var closestPoint = routePoints[lastIdx];
+                var minDiff = Math.abs(currentTime - routePoints[lastIdx].seconds);
+                
+                // Scan forward/backward from last index
+                // (Reset to 0 if we scrubbed backward)
+                var startSearch = (currentTime < routePoints[lastIdx].seconds) ? 0 : lastIdx;
 
-                for (var i = 1; i < routePoints.length; i++) {{
-                    var diff = Math.abs(currentTime - routePoints[i].seconds_elapsed);
-                    if (diff < minDiff) {{
+                for (var i = startSearch; i < routePoints.length; i++) {{
+                    var diff = Math.abs(currentTime - routePoints[i].seconds);
+                    if (diff <= minDiff) {{
                         minDiff = diff;
                         closestPoint = routePoints[i];
+                        lastIdx = i;
+                    }} else {{
+                        // Assuming sorted time, if diff starts growing, we passed the closest point
+                        break; 
                     }}
                 }}
 
-                // Move Marker
-                marker.setLatLng([closestPoint.latitude, closestPoint.longitude]);
+                // Update UI
+                marker.setLatLng([closestPoint.lat, closestPoint.lon]);
+                
+                document.getElementById("disp-rate").innerText = closestPoint.rate;
+                document.getElementById("disp-split").innerText = fmtSplit(closestPoint.split);
+                document.getElementById("disp-dist").innerText = closestPoint.dist;
+                document.getElementById("disp-time").innerText = closestPoint.time;
             }};
         </script>
     </body>
     </html>
     """
     return html_code
-
 
 def generate_client_side_replay(merged_df):
     """
