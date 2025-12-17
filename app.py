@@ -182,7 +182,10 @@ if uploaded_gpx is not None:
         folium.PolyLine(coordinates, color="blue", weight=2.5, opacity=1).add_to(m)
         
         # Render map in Streamlit
-        st_folium(m, width=500, height=500)
+        st_folium(m, width=800, height=500)
+
+        # Add Fullscreen Button
+        Fullscreen().add_to(m_compare)
 
         #View Raw GPX Data 
         with st.expander("📂 Raw GPX Data View (Click to expand)"):
@@ -392,7 +395,7 @@ if tracks_to_plot:
                 color=track['color'], weight=3, opacity=0.7, tooltip=track['name']
             ).add_to(m_compare)
         
-        st_folium(m_compare, width=500, height=500, key="compare_map")
+        st_folium(m_compare, width=800, height=500, key="compare_map")
         
         # Dynamic Legend
         st.markdown(
