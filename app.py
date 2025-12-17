@@ -6,9 +6,34 @@ from streamlit_folium import st_folium
 import matplotlib.pyplot as plt
 import requests #for sending the feedback data to email service
 
+def parse_time_str(time_str):
+    """
+    Parses time strings like '00:15:30' or '15:30.5' into total seconds.
+    Used for the CSV 'Elapsed Time' column.
+    round to the nearest integer
+    """
+    try:
+        if pd.isna(time_str): return 0
+        # If it's already a number, return the rounded integer
+        if isinstance(time_str, (int, float)): return int(round(time_str))
+        
+        parts = str(time_str).split(':')
+        total_seconds = 0.0
+        
+        if len(parts) == 3: # HH:MM:SS
+            h, m, s = parts
+            total_seconds = int(h) * 3600 + int(m) * 60 + float(s)
+        elif len(parts) == 2: # MM:SS
+            m, s = parts
+            total_seconds = int(m) * 60 + float(s)
+            
+        return int(round(total_seconds))
+    except:
+        return 0
+
 def parse_gpx(file_buffer):
     """
-    Parses a GPX file buffer and returns a DataFrame of coordinates.
+    Parses a GPX file buffer and returns a DataFrame of coordinates. + add "seconds_elapsed" column to compare with csv files
 
     Parameters:
     -----------
@@ -33,30 +58,62 @@ def parse_gpx(file_buffer):
                     'longitude': point.longitude,
                     'time': point.time
                 })
+    df = pd.DataFrame(data)
+
+    #Convert absolute time to elapsed seconds
+    if not df.empty and 'time' in df.columns:
+        # Ensure time is in datetime format (gpxpy usually does this, but being safe)
+        df['time'] = pd.to_datetime(df['time'])
+        
+        # Get the start time (first entry)
+        start_time = df['time'].iloc[0]
+        
+        # Calculate difference and convert to total seconds
+        df['seconds_elapsed'] = (df['time'] - start_time).dt.total_seconds()
     
-    return pd.DataFrame(data)
+    return df
 
 def plot_metrics(df):
     """
     Generates a line chart for rowing metrics (Rate/Speed) from CSV data.
-
+    Sets 'Distance' as the X-axis if available.
+    
     Parameters:
     -----------
     df : pd.DataFrame
         The DataFrame containing CoxOrb CSV data.
     """
     # Streamlit's native line chart is interactive by default
-    # We assume standard CoxOrb columns; users may need to adjust column names
-    # Common columns: 'Stroke Rate', 'Speed', 'Distance', 'Power'
+    #1 Clean column names (remove extra spaces)
+    df.columns = [c.strip() for c in df.columns]
+
+    #2 Define the exact columns we want to plot based on your file format
+    #file format: Distance, Elapsed Time, Stroke Count, Rate, Check, Speed (mm:ss/500m), Speed (m/s), Distance/Stroke
+    wanted_cols = ['Rate', 'Speed (m/s)', 'Distance/Stroke']
     
-    available_cols = [c for c in ['Rate', 'Speed', 'Power', 'Stroke Rate'] if c in df.columns]
+    #3 Filter for columns that actually exist in the file
+    cols_to_plot = [c for c in wanted_cols if c in df.columns]
     
-    if available_cols:
+    if cols_to_plot:
         st.subheader("Performance Metrics")
-        st.line_chart(df[available_cols])
-    else:
-        st.warning("Could not identify standard CoxOrb columns (Rate, Speed, Power).")
-        st.write("Available columns:", df.columns.tolist())
+        
+        # If 'Distance' exists, set it as the index (X-axis)
+        if 'Distance' in df.columns:
+            st.write("X-axis: Distance (m)")
+            # We explicitly set the index to Distance for the chart
+            chart_data = df.set_index('Distance')[cols_to_plot]
+            st.line_chart(chart_data)
+        
+        # If no Distance, try 'Elapsed Time'
+        elif 'Elapsed Time' in df.columns:
+            st.write("X-axis: Time")
+            chart_data = df.set_index('Elapsed Time')[cols_to_plot]
+            st.line_chart(chart_data)
+            
+        # Fallback to Row Number (Stroke Count)
+        else:
+            st.write("X-axis: Stroke Number")
+            st.line_chart(df[cols_to_plot])
 
 def send_simple_email(name, email, subject, message):
     """
@@ -95,7 +152,7 @@ def send_simple_email(name, email, subject, message):
 
 # --- Main App Logic ---
 
-st.title("CoxOrb Data Visualizer")
+st.title("CoxOrb Data Visualiser")
 st.write("Upload your rowing data to view the route and analysis.")
 
 # 1. File Uploaders
@@ -103,12 +160,12 @@ c1, c2 = st.columns(2)
 uploaded_gpx = c1.file_uploader("Upload GPX", type=['gpx'])
 uploaded_csv = c2.file_uploader("Upload CSV (we recommend GRAPH over SPLIT)", type=['csv'])
 
-# 2. Process and Plot GPX (Map)
+# 2. Process and Plot GPX (Map + Raw View)
 if uploaded_gpx is not None:
     try:
         # Parse the GPX file
         track_df = parse_gpx(uploaded_gpx)
-        
+
         st.subheader("Rowing Route")
         
         # Center map on the starting point
@@ -120,7 +177,12 @@ if uploaded_gpx is not None:
         folium.PolyLine(coordinates, color="blue", weight=2.5, opacity=1).add_to(m)
         
         # Render map in Streamlit
-        st_folium(m, width=700, height=500)
+        st_folium(m, width=500, height=500)
+
+        #View Raw GPX Data 
+        with st.expander("📂 Raw GPX Data View (Click to expand)"):
+            st.write("Here is the raw data extracted from the GPX file:")
+            st.dataframe(track_df)
         
     except Exception as e:
         st.error(f"Error processing GPX: {e}")
@@ -129,12 +191,20 @@ if uploaded_gpx is not None:
 if uploaded_csv is not None:
     try:
         # Load CSV into Pandas DataFrame
-        # Skiprows might be needed depending on CoxOrb header format (often line 1 or 2)
-        df = pd.read_csv(uploaded_csv)
+        # header=1 tells pandas to ignore the first row ("COXORB Performance Data...") and use the second row as the actual column headers.
+        df = pd.read_csv(uploaded_csv, header=1)
+
+        # Clean column names
+        df.columns = [c.strip() for c in df.columns]
+
+        #Convert 'Elapsed Time' string to 'seconds_elapsed' float ---
+        if 'Elapsed Time' in df.columns:
+            df['seconds_elapsed'] = df['Elapsed Time'].apply(parse_time_str)
         
         # Display raw data snapshot
-        with st.expander("Raw Data View"):
-            st.dataframe(df.head())
+        with st.expander("📂 Raw CSV Data View (Click to expand)"):
+            st.write("Here is the raw data extracted from the CSV file:")
+            st.dataframe(df)
         
         # Plot the stats
         plot_metrics(df)
