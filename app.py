@@ -180,12 +180,12 @@ if uploaded_gpx is not None:
         # Draw the route line (PolyLine)
         coordinates = list(zip(gpx_df['latitude'], gpx_df['longitude']))
         folium.PolyLine(coordinates, color="blue", weight=2.5, opacity=1).add_to(m)
-        
-        # Render map in Streamlit
-        st_folium(m, width=800, height=500)
 
         # Add Fullscreen Button
         Fullscreen().add_to(m)
+        
+        # Render map in Streamlit
+        st_folium(m, width=800, height=500)
 
         #View Raw GPX Data 
         with st.expander("📂 Raw GPX Data View (Click to expand)"):
