@@ -467,23 +467,3 @@ with st.form("contact_form", clear_on_submit=True):
                 st.error(f"Failed to send. Status Code: {status}")
                 with st.expander("See Error Details"):
                     st.text(response_text)
-
-
-#UNDER CONSTRUCTION
-# UNDERCONSTRUCTION. Audio Analysis Section ---
-st.markdown("---")
-st.header("Audio Analysis - UNDER CONSTRUCTION")
-st.write("Upload an audio recording (e.g., Cox recording) to play it in sync with the map.")
-
-uploaded_audio = st.file_uploader("Upload Audio File (MP3/WAV)", type=['mp3', 'wav', 'm4a', 'ogg'])
-
-if gpx_df is not None and uploaded_audio is not None:
-    st.write("Loading audio player and map sync...")
-    
-    if 'seconds_elapsed' in gpx_df.columns:
-        # Calls the function from utils.py
-        audio_html = generate_audio_map_html(gpx_df, uploaded_audio.getvalue(), uploaded_audio.type)
-        components.html(audio_html, height=550)
-    else:
-        st.error("GPX data does not have time info required for sync.")
-                    st.text(response_text)
