@@ -3,27 +3,35 @@ import pandas as pd
 import gpxpy
 import folium
 from streamlit_folium import st_folium
-import matplotlib.pyplot as plt
-import requests #for sending the feedback data to email service
+import requests
+from datetime import timedelta
+import numpy as np
+
+# --- 1. Helper Functions ---
+
+def parse_time_str(time_str):
+    """
+    Parses time strings like '00:15:30' or '15:30.5' into total seconds.
+    """
+    try:
+        if pd.isna(time_str): return 0
+        # If it's already a number (seconds), return it
+        if isinstance(time_str, (int, float)): return time_str
+        
+        parts = str(time_str).split(':')
+        if len(parts) == 3: # HH:MM:SS
+            h, m, s = parts
+            return int(h) * 3600 + int(m) * 60 + float(s)
+        elif len(parts) == 2: # MM:SS
+            m, s = parts
+            return int(m) * 60 + float(s)
+        return 0
+    except:
+        return 0
 
 def parse_gpx(file_buffer):
-    """
-    Parses a GPX file buffer and returns a DataFrame of coordinates.
-
-    Parameters:
-    -----------
-    file_buffer : UploadedFile
-        The GPX file object uploaded by the user.
-
-    Returns:
-    --------
-    pd.DataFrame
-        A DataFrame containing 'latitude' and 'longitude' columns.
-    """
-    # Parse the GPX file using gpxpy library
+    """Parses GPX to DataFrame and calculates seconds_elapsed."""
     gpx = gpxpy.parse(file_buffer)
-    
-    # Extract point data from tracks/segments
     data = []
     for track in gpx.tracks:
         for segment in track.segments:
@@ -31,161 +39,185 @@ def parse_gpx(file_buffer):
                 data.append({
                     'latitude': point.latitude,
                     'longitude': point.longitude,
-                    'time': point.time
+                    'time': point.time,
+                    'elevation': point.elevation
                 })
     
-    return pd.DataFrame(data)
-
-def plot_metrics(df):
-    """
-    Generates a line chart for rowing metrics (Rate/Speed) from CSV data.
-
-    Parameters:
-    -----------
-    df : pd.DataFrame
-        The DataFrame containing CoxOrb CSV data.
-    """
-    # Streamlit's native line chart is interactive by default
-    # We assume standard CoxOrb columns; users may need to adjust column names
-    # Common columns: 'Stroke Rate', 'Speed', 'Distance', 'Power'
+    df = pd.DataFrame(data)
     
-    available_cols = [c for c in ['Rate', 'Speed', 'Power', 'Stroke Rate'] if c in df.columns]
+    # Calculate Seconds Elapsed (Relative to start)
+    if not df.empty and 'time' in df.columns:
+        start_time = df['time'].iloc[0]
+        df['seconds_elapsed'] = (df['time'] - start_time).dt.total_seconds()
     
-    if available_cols:
-        st.subheader("Performance Metrics")
-        st.line_chart(df[available_cols])
-    else:
-        st.warning("Could not identify standard CoxOrb columns (Rate, Speed, Power).")
-        st.write("Available columns:", df.columns.tolist())
+    return df
+
+def load_and_clean_csv(file_buffer):
+    """Loads CSV and standardizes column names."""
+    df = pd.read_csv(file_buffer)
+    
+    # Standardize Column Names (strip spaces, handle potential issues)
+    df.columns = [c.strip() for c in df.columns]
+    
+    # Map common variations to standard internal names
+    # User's columns: Distance, Elapsed Time, Avg Rate, Avg Speed (m/s)
+    col_map = {
+        'Elapsed Time': 'time_str',
+        'Distance': 'distance',
+        'Avg Rate': 'rate',
+        'Avg Speed (m/s)': 'speed_ms',
+        'Avg Speed (mm:ss/500m)': 'split_500'
+    }
+    
+    # Rename columns if they exist
+    df = df.rename(columns={k: v for k, v in col_map.items() if k in df.columns})
+    
+    # Convert 'time_str' to 'seconds_elapsed' for merging
+    if 'time_str' in df.columns:
+        df['seconds_elapsed'] = df['time_str'].apply(parse_time_str)
+    
+    return df
 
 def send_simple_email(name, email, subject, message):
-    """
-    Sends the user feedback to the developer via the Formspree API.
+    api_url = "https://formspree.io/f/xpwvvnkn" 
+    payload = {"name": name, "_replyto": email, "_subject": subject, "message": message}
+    try:
+        response = requests.post(api_url, data=payload)
+        return response.status_code, response.text
+    except Exception as e:
+        return 0, str(e)
 
-    Parameters:
-    -----------
-    name : str
-        The name of the user submitting feedback.
-    email : str
-        The user's email address for replies.
-    subject : str
-        The subject header of the message.
-    message : str
-        The main body of the feedback text.
+# --- 2. Main App Logic ---
 
-    Returns:
-    --------
-    int
-        The HTTP status code of the request (200 indicates success).
-    """
-    # Replace 'YOUR_FORMSPREE_ENDPOINT' below with your actual URL
-    # Example format: "https://formspree.io/f/xyzkqwe"
-    api_url = "https://formspree.io/f/xpwvvnkn"
-
-    payload = {
-        "name": name,
-        "_replyto": email,
-        "_subject": subject,
-        "message": message
-    }
-
-    # Post the data to the API
-    response = requests.post(api_url, data=payload)
-    return response.status_code, response.text
-
-# --- Main App Logic ---
-
+st.set_page_config(page_title="CoxOrb Visualizer", layout="wide")
 st.title("CoxOrb Data Visualizer")
-st.write("Upload your rowing data to view the route and analysis.")
 
-# 1. File Uploaders
-c1, c2 = st.columns(2)
-uploaded_gpx = c1.file_uploader("Upload GPX", type=['gpx'])
-uploaded_csv = c2.file_uploader("Upload CSV (we recommend GRAPH over SPLIT)", type=['csv'])
+# Initialize Session State for Data
+if 'merged_data' not in st.session_state:
+    st.session_state.merged_data = None
 
-# 2. Process and Plot GPX (Map)
-if uploaded_gpx is not None:
-    try:
-        # Parse the GPX file
-        track_df = parse_gpx(uploaded_gpx)
-        
-        st.subheader("Rowing Route")
-        
-        # Center map on the starting point
-        start_location = [track_df['latitude'].iloc[0], track_df['longitude'].iloc[0]]
-        m = folium.Map(location=start_location, zoom_start=14)
-        
-        # Draw the route line (PolyLine)
-        coordinates = list(zip(track_df['latitude'], track_df['longitude']))
-        folium.PolyLine(coordinates, color="blue", weight=2.5, opacity=1).add_to(m)
-        
-        # Render map in Streamlit
-        st_folium(m, width=700, height=500)
-        
-    except Exception as e:
-        st.error(f"Error processing GPX: {e}")
+# Sidebar for Uploads
+with st.sidebar:
+    st.header("Data Upload")
+    uploaded_gpx = st.file_uploader("1. Upload GPX", type=['gpx'])
+    uploaded_csv = st.file_uploader("2. Upload CSV", type=['csv'])
+    
+    if uploaded_gpx and uploaded_csv:
+        if st.button("Process & Link Files"):
+            try:
+                # 1. Load Files
+                gpx_df = parse_gpx(uploaded_gpx)
+                csv_df = load_and_clean_csv(uploaded_csv)
+                
+                # 2. Merge Data
+                # We merge "asof" (nearest timestamp) to link CSV stroke data to GPX coordinates
+                gpx_df = gpx_df.sort_values('seconds_elapsed')
+                csv_df = csv_df.sort_values('seconds_elapsed')
+                
+                merged = pd.merge_asof(
+                    csv_df, 
+                    gpx_df[['seconds_elapsed', 'latitude', 'longitude']], 
+                    on='seconds_elapsed', 
+                    direction='nearest',
+                    tolerance=5 # Match if within 5 seconds
+                )
+                
+                st.session_state.merged_data = merged
+                st.success("Files Linked Successfully!")
+                
+            except Exception as e:
+                st.error(f"Error merging files: {e}")
 
-# 3. Process and Plot CSV (Stats)
-if uploaded_csv is not None:
-    try:
-        # Load CSV into Pandas DataFrame
-        # Skiprows might be needed depending on CoxOrb header format (often line 1 or 2)
-        df = pd.read_csv(uploaded_csv)
-        
-        # Display raw data snapshot
-        with st.expander("Raw Data View"):
-            st.dataframe(df.head())
-        
-        # Plot the stats
-        plot_metrics(df)
-        
-    except Exception as e:
-        st.error(f"Error processing CSV: {e}")
+# --- 3. Visualization Section ---
 
-
-# 4. Feedback Part on the Bottom of the page:
-st.markdown("---")  # Horizontal rule for visual separation
-
-# 1. Developer Credits
-st.markdown(
-    """
-    <div style='text-align: center; color: grey;'>
-        <small>This web application is developed and maintained by 
-        <a href='https://github.com/NikJur'>NikJur (Github)</a>.</small>
-    </div>
-    """,
-    unsafe_allow_html=True
-)
-
-st.header("Contact & Feedback")
-st.write("Have suggestions? Send a message directly using the form below.")
-
-# 2. Contact Form
-with st.form("contact_form", clear_on_submit=True):
-    # Layout the input fields
-    col1, col2 = st.columns(2)
+if st.session_state.merged_data is not None:
+    df = st.session_state.merged_data
+    
+    # A. The Slider
+    # We use the index (Stroke Number) or Time as the slider
+    max_time = int(df['seconds_elapsed'].max())
+    
+    st.markdown("### ⏱️ Replay Your Row")
+    
+    # Slider returns the 'seconds_elapsed' value
+    selected_time = st.slider(
+        "Move slider to see stats at that moment:", 
+        min_value=0, 
+        max_value=max_time, 
+        value=0,
+        step=1
+    )
+    
+    # Get the row closest to the selected time
+    # We use iloc to find the index where seconds_elapsed is closest
+    row_idx = (df['seconds_elapsed'] - selected_time).abs().idxmin()
+    current_row = df.loc[row_idx]
+    
+    # B. The Metrics Display (Dynamic)
+    col1, col2, col3, col4 = st.columns(4)
     with col1:
-        name_input = st.text_input("Name")
+        st.metric("Time", f"{timedelta(seconds=int(current_row['seconds_elapsed']))}")
     with col2:
-        email_input = st.text_input("Contact Email")
+        val = current_row.get('rate', 0)
+        st.metric("Rate (spm)", f"{val:.1f}")
+    with col3:
+        val = current_row.get('speed_ms', 0)
+        st.metric("Speed (m/s)", f"{val:.2f}")
+    with col4:
+        val = current_row.get('distance', 0)
+        st.metric("Distance (m)", f"{val:.0f}")
+        
+    # C. The Map (with current position marker)
+    # Note: We redraw the map to update the marker. 
     
-    subject_input = st.text_input("Subject Header")
-    message_input = st.text_area("Main Text")
+    # Base Map centered on the track
+    m = folium.Map(location=[df['latitude'].mean(), df['longitude'].mean()], zoom_start=14)
     
-    # Form submit button
-    submitted = st.form_submit_button("Send Feedback")
+    # 1. Draw the full track (Grey)
+    points = list(zip(df['latitude'], df['longitude']))
+    folium.PolyLine(points, color="grey", weight=3, opacity=0.5).add_to(m)
+    
+    # 2. Draw the path UP TO the current point (Blue)
+    # Filter data up to selected time
+    past_df = df[df['seconds_elapsed'] <= selected_time]
+    if not past_df.empty:
+        past_points = list(zip(past_df['latitude'], past_df['longitude']))
+        folium.PolyLine(past_points, color="blue", weight=4, opacity=1).add_to(m)
+    
+    # 3. Add Marker for current position
+    folium.CircleMarker(
+        location=[current_row['latitude'], current_row['longitude']],
+        radius=8,
+        color="red",
+        fill=True,
+        fill_color="red"
+    ).add_to(m)
+    
+    st_folium(m, width=1000, height=500)
+    
+    # D. Full Charts below
+    st.subheader("Session Analysis")
+    st.line_chart(df.set_index('seconds_elapsed')[['rate', 'speed_ms']])
 
-    if submitted:
-        # Basic validation to ensure fields are not empty
-        if not (name_input and email_input and message_input):
-            st.error("Please fill in your name, email, and a message.")
-        else:
-            # Get both status and response text
-            status, response_text = send_simple_email(name_input, email_input, subject_input, message_input)
+else:
+    st.info("Please upload both GPX and CSV files in the sidebar to start.")
 
-            if status == 200:
-                st.success("Message sent successfully! Thank you for your feedback; we will get back to you as soon as possible.")
+
+# --- 4. Contact Form ---
+st.markdown("---")
+with st.expander("Contact & Feedback"):
+    with st.form("contact_form", clear_on_submit=True):
+        col1, col2 = st.columns(2)
+        with col1: name_input = st.text_input("Name")
+        with col2: email_input = st.text_input("Contact Email")
+        subject_input = st.text_input("Subject Header")
+        message_input = st.text_area("Main Text")
+        submitted = st.form_submit_button("Send Feedback")
+        
+        if submitted:
+            if not (name_input and email_input and message_input):
+                st.error("Please fill in fields.")
             else:
-                st.error(f"Failed to send. Status Code: {status}")
-                with st.expander("See Error Details"):
-                    st.text(response_text)
+                status, txt = send_simple_email(name_input, email_input, subject_input, message_input)
+                if status == 200: st.success("Sent!")
+                else: st.error(f"Error {status}: {txt}")
