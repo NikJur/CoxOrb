@@ -184,6 +184,6 @@ with st.form("contact_form", clear_on_submit=True):
             status = send_simple_email(name_input, email_input, subject_input, message_input)
             
             if status == 200:
-                st.success("Message sent successfully! I will get back to you soon.")
+                st.success("Message sent successfully! Thank you for your feedback; we will get back to you as soon as possible.")
             else:
                 st.error("There was an issue sending your message. Please try again later.")
