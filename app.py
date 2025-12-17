@@ -10,7 +10,7 @@ import streamlit.components.v1 as components
 from html_utils import generate_audio_map_html, generate_client_side_replay
 
 #set format to wide desktop screen:
-st.set_page_config(layout="wide", page_title="CoxOrb Visualiser")
+st.set_page_config(layout="wide", page_title="CoxOrb Data Visualiser")
 
 #check:
 try:
