@@ -269,29 +269,38 @@ if gpx_df is not None and csv_df is not None:
                 st.caption(f"Time: {time_str}")
 
             with col_map:
-                # --- MAP GENERATION (Robust Buffered Bounds) ---
+                # --- MAP GENERATION (Persist User Zoom/Pan) ---
                 
-                # 1. Find absolute min/max of the ENTIRE dataset
-                min_lat = gpx_df['latitude'].min()
-                max_lat = gpx_df['latitude'].max()
-                min_lon = gpx_df['longitude'].min()
-                max_lon = gpx_df['longitude'].max()
+                # Default Logic (Auto-Center)
+                # We calculate this just in case we don't have a user state yet.
+                min_lat, max_lat = gpx_df['latitude'].min(), gpx_df['latitude'].max()
+                min_lon, max_lon = gpx_df['longitude'].min(), gpx_df['longitude'].max()
+                default_center = [(min_lat + max_lat) / 2, (min_lon + max_lon) / 2]
+                default_zoom = 14
                 
-                # 2. Calculate a 5% "Breathing Room" buffer
-                lat_buffer = (max_lat - min_lat) * 0.05
-                lon_buffer = (max_lon - min_lon) * 0.05
+                # Check Session State for "Last Known Position"
+                # If the map has been interacted with, 'interactive_map' will contain the 'center' and 'zoom'
+                map_state = st.session_state.get("interactive_map", {})
                 
-                # 3. Create buffered corners
-                sw_corner = [min_lat - lat_buffer, min_lon - lon_buffer]
-                ne_corner = [max_lat + lat_buffer, max_lon + lon_buffer]
+                if map_state and "center" in map_state and "zoom" in map_state:
+                    # Use the USER'S last position
+                    center_to_use = [map_state["center"]["lat"], map_state["center"]["lng"]]
+                    zoom_to_use = map_state["zoom"]
+                    should_fit_bounds = False # Don't force auto-fit if user has taken control
+                else:
+                    # Use the AUTO calculated position
+                    center_to_use = default_center
+                    zoom_to_use = default_zoom
+                    should_fit_bounds = True
                 
-                # 4. Center map based on these buffered bounds
-                center_lat = (min_lat + max_lat) / 2
-                center_lon = (min_lon + max_lon) / 2
-                m_interactive = folium.Map(location=[center_lat, center_lon], zoom_start=13)
+                # Create Map
+                m_interactive = folium.Map(location=center_to_use, zoom_start=zoom_to_use)
 
-                # 5. Fit the map to the buffered box
-                m_interactive.fit_bounds([sw_corner, ne_corner])
+                # Only auto-fit bounds on the very first load
+                if should_fit_bounds:
+                     sw = [min_lat, min_lon]
+                     ne = [max_lat, max_lon]
+                     m_interactive.fit_bounds([sw, ne])
 
                 # Full Path (Gray)
                 folium.PolyLine(
@@ -314,6 +323,7 @@ if gpx_df is not None and csv_df is not None:
                     location=boat_loc, radius=8, color="red", fill=True, fill_color="red"
                 ).add_to(m_interactive)
 
+                # Crucial: pass the key so state is saved
                 st_folium(m_interactive, width=800, height=500, key="interactive_map")
         else:
             st.warning("Could not link CSV and GPX data. Please check if the timestamps align.")
