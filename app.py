@@ -187,7 +187,7 @@ with c2:
     # Use the logo as the main title
     st.image("logo.png", use_container_width=True)
     
-st.write("Upload your rowing data to view the route and analysis.")
+st.write("Upload your rowing data to view the route and analysis. Upload both GPX and CSV files to enable the interactive slider replay.")
 
 # 1. File Uploaders
 c1, c2 = st.columns(2)
@@ -253,125 +253,12 @@ if uploaded_csv is not None:
     except Exception as e:
         st.error(f"Error processing CSV: {e}")
 
-# 4.  --- Interactive Replay Map (Combined Data) ---
+
+# 4. --- Client Side HTML based interactive replay map ---
 
 if gpx_df is not None and csv_df is not None:
     st.markdown("---")
-    st.subheader("Interactive Replay")
-    st.write("Move the map to frame the course. Drag the slider to replay. The map stays where you leave it.")
-
-    try:
-        # A. PREPARE DATA
-        gpx_clean = gpx_df.dropna(subset=['seconds_elapsed']).copy()
-        csv_clean = csv_df.dropna(subset=['seconds_elapsed']).copy()
-        
-        gpx_clean['seconds_elapsed'] = gpx_clean['seconds_elapsed'].astype(int)
-        csv_clean['seconds_elapsed'] = csv_clean['seconds_elapsed'].astype(int)
-        
-        gpx_sorted = gpx_clean.sort_values('seconds_elapsed')
-        csv_sorted = csv_clean.sort_values('seconds_elapsed')
-
-        # B. MERGE
-        merged_df = pd.merge_asof(
-            csv_sorted, 
-            gpx_sorted[['seconds_elapsed', 'latitude', 'longitude']], 
-            on='seconds_elapsed', 
-            direction='nearest',
-            tolerance=5 
-        )
-
-        merged_df = merged_df.dropna(subset=['latitude', 'longitude'])
-
-        if not merged_df.empty:
-            # C. The Slider (Based on Index for smooth playback)
-            max_index = len(merged_df) - 1
-            selected_index = st.slider("Select Point / Stroke", 0, max_index, 0)
-            
-            # Get current row
-            current_row = merged_df.iloc[selected_index]
-            
-            # D. Layout
-            col_stats, col_map = st.columns([1, 3])
-            
-            with col_stats:
-                st.markdown("### Current Stats")
-                rate = current_row.get('Rate', 0)
-                speed = current_row.get('Speed (m/s)', 0)
-                dist = current_row.get('Distance', 0)
-                time_str = current_row.get('Elapsed Time', '00:00')
-
-                st.metric("Rate (SPM)", f"{rate}")
-                st.metric("Speed (m/s)", f"{speed}")
-                st.metric("Distance", f"{dist} m")
-                st.caption(f"Time: {time_str}")
-
-            with col_map:
-                # --- MAP GENERATION ---
-                
-                # 1. Determine Zoom/Center (Persist User State)
-                min_lat, max_lat = gpx_df['latitude'].min(), gpx_df['latitude'].max()
-                min_lon, max_lon = gpx_df['longitude'].min(), gpx_df['longitude'].max()
-                default_center = [(min_lat + max_lat) / 2, (min_lon + max_lon) / 2]
-                default_zoom = 14
-                
-                map_state = st.session_state.get("interactive_map", {})
-                
-                if map_state and "center" in map_state and "zoom" in map_state:
-                    center_to_use = [map_state["center"]["lat"], map_state["center"]["lng"]]
-                    zoom_to_use = map_state["zoom"]
-                    should_fit_bounds = False 
-                else:
-                    center_to_use = default_center
-                    zoom_to_use = default_zoom
-                    should_fit_bounds = True
-                
-                m_interactive = folium.Map(location=center_to_use, zoom_start=zoom_to_use)
-
-                if should_fit_bounds:
-                     sw = [min_lat, min_lon]
-                     ne = [max_lat, max_lon]
-                     m_interactive.fit_bounds([sw, ne])
-
-                # 2. Draw Full Route in RED (This represents "Untravelled" background)
-                folium.PolyLine(
-                    list(zip(gpx_df['latitude'], gpx_df['longitude'])), 
-                    color="red", weight=3, opacity=0.6, tooltip="Untravelled"
-                ).add_to(m_interactive)
-
-                # 3. Draw Travelled Route in BLUE (Overlays the red line)
-                current_time_sec = current_row['seconds_elapsed']
-                path_so_far = gpx_df[gpx_df['seconds_elapsed'] <= current_time_sec]
-                if not path_so_far.empty:
-                    folium.PolyLine(
-                        list(zip(path_so_far['latitude'], path_so_far['longitude'])), 
-                        color="blue", weight=4, opacity=1, tooltip="Travelled"
-                    ).add_to(m_interactive)
-
-                # 4. Boat Dot (Added black border so it pops against the red line)
-                boat_loc = [current_row['latitude'], current_row['longitude']]
-                folium.CircleMarker(
-                    location=boat_loc, 
-                    radius=8, 
-                    color="black",      # Stroke color (contrast)
-                    weight=1,           # Stroke width
-                    fill=True, 
-                    fill_color="red",   # Fill color
-                    fill_opacity=1
-                ).add_to(m_interactive)
-
-                st_folium(m_interactive, width=800, height=500, key="interactive_map")
-        else:
-            st.warning("Could not link CSV and GPX data. Please check if the timestamps align.")
-            
-    except Exception as e:
-        st.error(f"Error in interactive section: {e}")
-
-
-# 4B. --- Client Side HTML based interactive replay map ---
-
-if gpx_df is not None and csv_df is not None:
-    st.markdown("---")
-    st.subheader("2. Fast Replay (Client-Side / No Lag)")
+    st.subheader("2. Interactive Replay")
     st.caption("This runs entirely in your browser. Drag the slider for instant feedback.")
 
     try:
