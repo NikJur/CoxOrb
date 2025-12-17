@@ -63,7 +63,7 @@ def plot_metrics(df):
 
     #2 Define the exact columns we want to plot based on your file format
     #file format: Distance, Elapsed Time, Stroke Count, Rate, Check, Speed (mm:ss/500m), Speed (m/s), Distance/Stroke
-    wanted_cols = ['Rate', 'Speed (m/s)', 'Stroke Count', 'Distance/Stroke', 'Check']
+    wanted_cols = ['Rate', 'Speed (m/s)', 'Distance/Stroke', 'Check']
     
     #3 Filter for columns that actually exist in the file
     cols_to_plot = [c for c in wanted_cols if c in df.columns]
@@ -142,7 +142,7 @@ if uploaded_gpx is not None:
         folium.PolyLine(coordinates, color="blue", weight=2.5, opacity=1).add_to(m)
         
         # Render map in Streamlit
-        st_folium(m, width=700, height=700)
+        st_folium(m, width=1700, height=700)
         
     except Exception as e:
         st.error(f"Error processing GPX: {e}")
