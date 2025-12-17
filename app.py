@@ -223,7 +223,7 @@ if gpx_df is not None and csv_df is not None:
     st.subheader("Interactive Replay")
     st.write("Move the map so you can see the entire course (we recommend picking the last point and zooming out as needed. Now, move the slider to see stats and location at that specific moment. The map will stay where you last left it.")
 
-try:
+    try:
         # A. PREPARE DATA
         gpx_clean = gpx_df.dropna(subset=['seconds_elapsed']).copy()
         csv_clean = csv_df.dropna(subset=['seconds_elapsed']).copy()
