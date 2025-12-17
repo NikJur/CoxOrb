@@ -105,7 +105,7 @@ def generate_client_side_replay(merged_df):
     
     # Handle column names flexibly
     rate_col = 'Rate' if 'Rate' in merged_df.columns else merged_df.columns[0]
-    speed_col = 'Split (m/s)'
+    speed_col = 'Speed (m/s)'
     dist_col = 'Distance'
     
     chart_labels = [] # X-axis labels (Distance)
@@ -118,7 +118,7 @@ def generate_client_side_replay(merged_df):
             'lat': row['latitude'],
             'lon': row['longitude'],
             'rate': row.get(rate_col, 0),
-            'split': row.get(speed_col, 0),
+            'speed': row.get(speed_col, 0),
             'dist': row.get(dist_col, 0),
             'time': str(row.get('Elapsed Time', '00:00')),
         })
@@ -187,7 +187,7 @@ def generate_client_side_replay(merged_df):
         
         <div class="stats-grid">
             <div class="stat-box"><span class="stat-label">Rate (SPM)</span><span id="disp-rate" class="stat-value">--</span></div>
-            <div class="stat-box"><span class="stat-label">Split (m/s)</span><span id="disp-split" class="stat-value">--</span></div>
+            <div class="stat-box"><span class="stat-label">Speed (m/s)</span><span id="disp-speed" class="stat-value">--</span></div>
             <div class="stat-box"><span class="stat-label">Distance (m)</span><span id="disp-dist" class="stat-value">--</span></div>
             <div class="stat-box"><span class="stat-label">Time</span><span id="disp-time" class="stat-value">--</span></div>
         </div>
@@ -290,7 +290,7 @@ def generate_client_side_replay(merged_df):
                             yAxisID: 'y'
                         }},
                         {{
-                            label: 'Split (m/s)',
+                            label: 'Speed (m/s)',
                             data: speedData,
                             borderColor: 'green',
                             borderWidth: 1.5,
@@ -320,7 +320,7 @@ def generate_client_side_replay(merged_df):
                             display: true,
                             position: 'right',
                             grid: {{ drawOnChartArea: false }}, 
-                            title: {{ display: true, text: 'Split' }}
+                            title: {{ display: true, text: 'Speed' }}
                         }}
                     }},
                     plugins: {{
@@ -340,7 +340,7 @@ def generate_client_side_replay(merged_df):
                 
                 // Update Stats
                 document.getElementById("disp-rate").innerText = pt.rate;
-                document.getElementById("disp-split").innerText = pt.speed;
+                document.getElementById("disp-speed").innerText = pt.speed;
                 document.getElementById("disp-dist").innerText = pt.dist;
                 document.getElementById("disp-time").innerText = pt.time;
                 
