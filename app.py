@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import requests #for sending the feedback data to email service
 from folium.plugins import Fullscreen
 import streamlit.components.v1 as components
-from html_utils import generate_audio_map_html
+from html_utils import generate_audio_map_html, generate_client_side_replay
 
 def parse_time_str(time_str):
     """
@@ -341,7 +341,32 @@ if gpx_df is not None and csv_df is not None:
     except Exception as e:
         st.error(f"Error in interactive section: {e}")
 
-# 6. --- Audio Analysis Section ---
+
+# 4B. --- Client Side HTML based interactive replay map ---
+
+if gpx_df is not None and csv_df is not None:
+    st.markdown("---")
+    st.subheader("2. Fast Replay (Client-Side / No Lag)")
+    st.caption("This runs entirely in your browser. Drag the slider for instant feedback.")
+
+    try:
+        # Re-merge using the cached function (instant)
+        merged_df_client = merge_datasets(gpx_df, csv_df)
+        
+        if not merged_df_client.empty:
+            # Generate HTML using the imported utility function
+            replay_html = generate_client_side_replay(merged_df_client)
+            
+            # Render the HTML component
+            components.html(replay_html, height=550)
+        else:
+            st.warning("Data could not be merged for the client-side view.")
+
+    except Exception as e:
+        st.error(f"Error in client-side section: {e}")
+        
+
+# 5. --- Audio Analysis Section ---
 st.markdown("---")
 st.header("Audio Analysis - UNDER CONSTRUCTION")
 st.write("Upload an audio recording (e.g., Cox recording) to play it in sync with the map.")
@@ -441,7 +466,7 @@ if tracks_to_plot:
 # 6. Feedback Part on the Bottom of the page:
 st.markdown("---")  # Horizontal rule for visual separation
 
-# 5.1. Developer Credits
+# 6.1. Developer Credits
 st.markdown(
     """
     <div style='text-align: center; color: grey;'>
@@ -455,7 +480,7 @@ st.markdown(
 st.header("Contact & Feedback")
 st.write("Have suggestions? Send a message directly using the form below.")
 
-# 5.2. Contact Form
+# 6.2. Contact Form
 with st.form("contact_form", clear_on_submit=True):
     # Layout the input fields
     col1, col2 = st.columns(2)
