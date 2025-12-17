@@ -31,7 +31,8 @@ def parse_gpx(file_buffer):
                 data.append({
                     'latitude': point.latitude,
                     'longitude': point.longitude,
-                    'time': point.time
+                    'time': point.time,
+                    'elevation': point.elevation
                 })
     
     return pd.DataFrame(data)
@@ -95,7 +96,7 @@ def send_simple_email(name, email, subject, message):
 
 # --- Main App Logic ---
 
-st.title("CoxOrb Data Visualizer")
+st.title("CoxOrb Data Visualiser")
 st.write("Upload your rowing data to view the route and analysis.")
 
 # 1. File Uploaders
@@ -103,12 +104,16 @@ c1, c2 = st.columns(2)
 uploaded_gpx = c1.file_uploader("Upload GPX", type=['gpx'])
 uploaded_csv = c2.file_uploader("Upload CSV (we recommend GRAPH over SPLIT)", type=['csv'])
 
-# 2. Process and Plot GPX (Map)
+# 2. Process and Plot GPX (Map + Raw View)
 if uploaded_gpx is not None:
     try:
         # Parse the GPX file
         track_df = parse_gpx(uploaded_gpx)
-        
+
+        #View Raw GPX Data 
+        with st.expander("📂 Raw GPX Data View (Click to expand)"):
+            st.write("Here is the raw data extracted from the GPX file:")
+            st.dataframe(track_df)
         st.subheader("Rowing Route")
         
         # Center map on the starting point
@@ -120,7 +125,7 @@ if uploaded_gpx is not None:
         folium.PolyLine(coordinates, color="blue", weight=2.5, opacity=1).add_to(m)
         
         # Render map in Streamlit
-        st_folium(m, width=700, height=500)
+        st_folium(m, width=700, height=700)
         
     except Exception as e:
         st.error(f"Error processing GPX: {e}")
