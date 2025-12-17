@@ -94,13 +94,12 @@ def generate_audio_map_html(gpx_df, audio_bytes, audio_mime_type):
 
 def generate_client_side_replay(merged_df):
     """
-    Generates a lag-free, client-side interactive replay map.
-    All data is passed as JSON to JavaScript, allowing instant slider response.
+    Generates a lag-free, client-side interactive replay map with Fullscreen support.
     """
-    # 1. Prepare Data for JS (Convert DataFrame to list of dicts)
-    # Ensure we only pick the columns we need to keep payload small
+    import json # Ensure json is imported inside or at top of file
+
+    # 1. Prepare Data for JS
     export_data = []
-    
     for index, row in merged_df.iterrows():
         export_data.append({
             'lat': row['latitude'],
@@ -114,20 +113,22 @@ def generate_client_side_replay(merged_df):
         
     json_data = json.dumps(export_data)
     
-    # 2. Define HTML Template
+    # 2. Define HTML Template with Fullscreen Plugin
     html_code = f"""
     <!DOCTYPE html>
     <html>
     <head>
         <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
         <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+        
+        <script src='https://api.mapbox.com/mapbox.js/plugins/leaflet-fullscreen/v1.0.1/Leaflet.fullscreen.min.js'></script>
+        <link href='https://api.mapbox.com/mapbox.js/plugins/leaflet-fullscreen/v1.0.1/leaflet.fullscreen.css' rel='stylesheet' />
+
         <style>
             body {{ font-family: sans-serif; margin: 0; padding: 0; }}
             #map {{ height: 400px; width: 100%; border-radius: 10px; }}
-            .controls {{ margin-top: 15px; padding: 10px; background: #f9f9f9; border-radius: 10px; }}
-            .slider-container {{ width: 100%; display: flex; align-items: center; gap: 10px; }}
-            input[type=range] {{ width: 100%; cursor: pointer; }}
             
+            /* Stats Grid Styling */
             .stats-grid {{ 
                 display: grid; 
                 grid-template-columns: repeat(4, 1fr); 
@@ -138,27 +139,20 @@ def generate_client_side_replay(merged_df):
             .stat-box {{ background: white; padding: 8px; border-radius: 5px; border: 1px solid #ddd; }}
             .stat-label {{ font-size: 12px; color: #666; display: block; }}
             .stat-value {{ font-size: 18px; font-weight: bold; color: #333; }}
+
+            /* Controls Styling */
+            .controls {{ margin-top: 15px; padding: 10px; background: #f9f9f9; border-radius: 10px; }}
+            .slider-container {{ width: 100%; display: flex; align-items: center; gap: 10px; }}
+            input[type=range] {{ width: 100%; cursor: pointer; }}
         </style>
     </head>
     <body>
         
         <div class="stats-grid">
-            <div class="stat-box">
-                <span class="stat-label">Rate (SPM)</span>
-                <span id="disp-rate" class="stat-value">--</span>
-            </div>
-            <div class="stat-box">
-                <span class="stat-label">Speed (m/s)</span>
-                <span id="disp-speed" class="stat-value">--</span>
-            </div>
-            <div class="stat-box">
-                <span class="stat-label">Distance (m)</span>
-                <span id="disp-dist" class="stat-value">--</span>
-            </div>
-            <div class="stat-box">
-                <span class="stat-label">Time</span>
-                <span id="disp-time" class="stat-value">--</span>
-            </div>
+            <div class="stat-box"><span class="stat-label">Rate (SPM)</span><span id="disp-rate" class="stat-value">--</span></div>
+            <div class="stat-box"><span class="stat-label">Speed (m/s)</span><span id="disp-speed" class="stat-value">--</span></div>
+            <div class="stat-box"><span class="stat-label">Distance (m)</span><span id="disp-dist" class="stat-value">--</span></div>
+            <div class="stat-box"><span class="stat-label">Time</span><span id="disp-time" class="stat-value">--</span></div>
         </div>
 
         <div id="map"></div>
@@ -179,14 +173,19 @@ def generate_client_side_replay(merged_df):
             var dataPoints = {json_data};
             var maxIdx = dataPoints.length - 1;
             
-            // Set slider max
             var slider = document.getElementById("replaySlider");
             slider.max = maxIdx;
 
             // 2. Initialize Map
             var startLat = dataPoints[0].lat;
             var startLon = dataPoints[0].lon;
-            var map = L.map('map').setView([startLat, startLon], 14);
+            
+            var map = L.map('map', {{
+                fullscreenControl: true, // Enable fullscreen button
+                fullscreenControlOptions: {{
+                    position: 'topleft'
+                }}
+            }}).setView([startLat, startLon], 14);
 
             L.tileLayer('https://{{s}}.tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png', {{
                 maxZoom: 19,
@@ -210,21 +209,16 @@ def generate_client_side_replay(merged_df):
             // 5. Interaction Logic
             function updateDisplay(idx) {{
                 var pt = dataPoints[idx];
-                
-                // Move Marker
                 marker.setLatLng([pt.lat, pt.lon]);
                 
-                // Update Stats
                 document.getElementById("disp-rate").innerText = pt.rate;
                 document.getElementById("disp-speed").innerText = pt.speed;
                 document.getElementById("disp-dist").innerText = pt.dist;
                 document.getElementById("disp-time").innerText = pt.time;
             }}
 
-            // Initial Load
             updateDisplay(0);
 
-            // Slider Event
             slider.oninput = function() {{
                 updateDisplay(this.value);
             }}
