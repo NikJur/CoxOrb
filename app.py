@@ -269,22 +269,29 @@ if gpx_df is not None and csv_df is not None:
                 st.caption(f"Time: {time_str}")
 
             with col_map:
-                # --- MAP GENERATION (Fixed Frame) ---
+                # --- MAP GENERATION (Robust Buffered Bounds) ---
                 
-                # 1. Calculate the bounding box of the ENTIRE GPX course
-                #    sw = South West (Min Lat, Min Lon)
-                #    ne = North East (Max Lat, Max Lon)
-                sw = [gpx_df['latitude'].min(), gpx_df['longitude'].min()]
-                ne = [gpx_df['latitude'].max(), gpx_df['longitude'].max()]
+                # 1. Find absolute min/max of the ENTIRE dataset
+                min_lat = gpx_df['latitude'].min()
+                max_lat = gpx_df['latitude'].max()
+                min_lon = gpx_df['longitude'].min()
+                max_lon = gpx_df['longitude'].max()
                 
-                # 2. Create Map centered roughly in the middle
-                center_lat = (sw[0] + ne[0]) / 2
-                center_lon = (sw[1] + ne[1]) / 2
+                # 2. Calculate a 5% "Breathing Room" buffer
+                lat_buffer = (max_lat - min_lat) * 0.05
+                lon_buffer = (max_lon - min_lon) * 0.05
+                
+                # 3. Create buffered corners
+                sw_corner = [min_lat - lat_buffer, min_lon - lon_buffer]
+                ne_corner = [max_lat + lat_buffer, max_lon + lon_buffer]
+                
+                # 4. Center map based on these buffered bounds
+                center_lat = (min_lat + max_lat) / 2
+                center_lon = (min_lon + max_lon) / 2
                 m_interactive = folium.Map(location=[center_lat, center_lon], zoom_start=13)
 
-                # 3. CRITICAL: Force the map to fit the bounds of the whole course
-                #    We add a little padding so the start/finish aren't right on the edge.
-                m_interactive.fit_bounds([sw, ne])
+                # 5. Fit the map to the buffered box
+                m_interactive.fit_bounds([sw_corner, ne_corner])
 
                 # Full Path (Gray)
                 folium.PolyLine(
