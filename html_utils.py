@@ -176,23 +176,22 @@ def generate_audio_map_html(input_df, audio_bytes, audio_mime_type):
 
 def generate_client_side_replay(merged_df):
     """
-    Generates a lag-free, client-side interactive replay map.
-    REPLACES Speed with Split (s/500m).
+    Generates a client-side interactive replay with Speed/Split toggles,
+    Fullscreen map, and DATA TRIMMING to fix axis scaling issues.
     """
     import json
     
     # 1. Prepare Data for JS
     export_data = []
     
-    # Column selection
+    # Handle column names flexibly
     rate_col = 'Rate' if 'Rate' in merged_df.columns else merged_df.columns[0]
     dist_col = 'Distance'
     
-    # PRIORITIZE SPLIT
+    # Prioritize Split, fallback to Speed
     if 'Split (s/500m)' in merged_df.columns:
         split_col = 'Split (s/500m)'
     else:
-        # Fallback if calculation failed (shouldn't happen with updated app.py)
         split_col = 'Speed (m/s)' 
 
     chart_labels = [] 
@@ -203,7 +202,7 @@ def generate_client_side_replay(merged_df):
         # Get values
         dist_val = int(row.get(dist_col, 0))
         rate_val = row.get(rate_col, 0)
-        split_val = row.get(split_col, 0) # This is in seconds (e.g., 135.5)
+        split_val = row.get(split_col, 0) 
 
         # Prepare Map/Stats Data
         export_data.append({
@@ -267,9 +266,22 @@ def generate_client_side_replay(merged_df):
                 flex-shrink: 0;
                 position: sticky; 
                 bottom: 0;
+                border-top: 1px solid #ddd;
             }}
-            .slider-container {{ width: 100%; display: flex; align-items: center; gap: 10px; }}
+            .slider-row {{ display: flex; align-items: center; gap: 10px; margin-bottom: 5px; }}
+            .slider-label {{ min-width: 70px; font-size: 11px; color: #555; font-weight: bold; }}
             input[type=range] {{ width: 100%; cursor: pointer; }}
+            
+            .trim-controls {{
+                margin-top: 5px;
+                padding-top: 5px;
+                border-top: 1px dashed #ccc;
+                display: flex;
+                gap: 15px;
+                justify-content: center;
+            }}
+            .trim-group {{ display: flex; flex-direction: column; width: 45%; }}
+            .trim-group label {{ font-size: 10px; color: #666; margin-bottom: 2px; }}
         </style>
     </head>
     <body>
@@ -288,18 +300,27 @@ def generate_client_side_replay(merged_df):
         </div>
 
         <div class="controls">
-            <div class="slider-container">
-                <span style="font-size:12px;">Start</span>
+            <div class="slider-row">
+                <span class="slider-label">Replay:</span>
                 <input type="range" id="replaySlider" min="0" max="100" value="0">
-                <span style="font-size:12px;">End</span>
+            </div>
+            
+            <div class="trim-controls">
+                <div class="trim-group">
+                    <label>Crop Start (Remove stationary start)</label>
+                    <input type="range" id="trimStart" min="0" max="100" value="0">
+                </div>
+                <div class="trim-group">
+                    <label>Crop End (Remove stationary end)</label>
+                    <input type="range" id="trimEnd" min="0" max="100" value="100">
+                </div>
             </div>
             <div style="text-align:center; margin-top:2px; color:#888; font-size:10px;">
-                Drag to replay • Chart indicates current stroke
+                Adjust "Crop" sliders to rescale the graph Y-axis.
             </div>
         </div>
 
         <script>
-            // --- Helper: Format Seconds to MM:SS.s ---
             function fmtSplit(seconds) {{
                 if (!seconds || seconds === 0) return "--";
                 let m = Math.floor(seconds / 60);
@@ -308,19 +329,26 @@ def generate_client_side_replay(merged_df):
                 return m + ":" + s;
             }}
 
-            // --- 1. Load Data ---
-            var dataPoints = {json_data};
-            var chartLabels = {chart_labels};
-            var rateData = {data_rate};
-            var splitData = {data_split};
-            
-            var maxIdx = dataPoints.length - 1;
-            var slider = document.getElementById("replaySlider");
-            slider.max = maxIdx;
+            // --- 1. Load RAW Data ---
+            const rawDataPoints = {json_data};
+            const rawLabels = {chart_labels};
+            const rawRate = {data_rate};
+            const rawSplit = {data_split};
+            const totalLen = rawDataPoints.length;
 
-            // --- 2. Initialize Map ---
-            var startLat = dataPoints[0].lat;
-            var startLon = dataPoints[0].lon;
+            // --- 2. Initialize UI Elements ---
+            const replaySlider = document.getElementById("replaySlider");
+            const trimStartSlider = document.getElementById("trimStart");
+            const trimEndSlider = document.getElementById("trimEnd");
+
+            // Initialize sliders bounds
+            trimStartSlider.max = totalLen - 1;
+            trimEndSlider.max = totalLen - 1;
+            trimEndSlider.value = totalLen - 1; // Default to full end
+
+            // --- 3. Initialize Map ---
+            var startLat = rawDataPoints[0].lat;
+            var startLon = rawDataPoints[0].lon;
             
             var map = L.map('map', {{
                 fullscreenControl: true,
@@ -331,7 +359,8 @@ def generate_client_side_replay(merged_df):
                 maxZoom: 19, attribution: '© OpenStreetMap'
             }}).addTo(map);
 
-            var latlngs = dataPoints.map(p => [p.lat, p.lon]);
+            // Polyline (Full Route)
+            var latlngs = rawDataPoints.map(p => [p.lat, p.lon]);
             var polyline = L.polyline(latlngs, {{color: 'blue', weight: 3, opacity: 0.6}}).addTo(map);
             map.fitBounds(polyline.getBounds());
 
@@ -343,19 +372,29 @@ def generate_client_side_replay(merged_df):
             }});
             var marker = L.marker([startLat, startLon], {{icon: boatIcon}}).addTo(map);
 
-            // --- 3. Initialize Chart ---
+            // --- 4. Initialize Chart ---
             var ctx = document.getElementById('perfChart').getContext('2d');
             
-            // Plugin for vertical line
             const verticalLinePlugin = {{
                 id: 'verticalLine',
                 defaults: {{ color: 'red', width: 2 }},
                 afterDraw: (chart, args, options) => {{
                     if (chart.tooltip?._active?.length) return;
-                    const idx = parseInt(slider.value);
+                    
+                    // Convert Replay Slider (Absolute Index) to Chart Index (Relative)
+                    const absoluteIdx = parseInt(replaySlider.value);
+                    const startCropIdx = parseInt(trimStartSlider.value);
+                    
+                    // Chart data index starts at 0, which corresponds to raw index 'startCropIdx'
+                    const relativeIdx = absoluteIdx - startCropIdx;
+
                     const meta = chart.getDatasetMeta(0);
-                    if (!meta.data[idx]) return;
-                    const x = meta.data[idx].x;
+                    
+                    // Safety check: is the point inside the current visible chart?
+                    if (relativeIdx < 0 || relativeIdx >= meta.data.length) return;
+                    if (!meta.data[relativeIdx]) return;
+
+                    const x = meta.data[relativeIdx].x;
                     const top = chart.chartArea.top;
                     const bottom = chart.chartArea.bottom;
                     const ctx = chart.ctx;
@@ -373,11 +412,11 @@ def generate_client_side_replay(merged_df):
             var myChart = new Chart(ctx, {{
                 type: 'line',
                 data: {{
-                    labels: chartLabels,
+                    labels: rawLabels, // Start with full data
                     datasets: [
                         {{
                             label: 'Rate (SPM)',
-                            data: rateData,
+                            data: rawRate,
                             borderColor: 'orange',
                             borderWidth: 1.5,
                             pointRadius: 0,
@@ -385,7 +424,7 @@ def generate_client_side_replay(merged_df):
                         }},
                         {{
                             label: 'Split (s/500m)',
-                            data: splitData,
+                            data: rawSplit,
                             borderColor: 'green',
                             borderWidth: 1.5,
                             pointRadius: 0,
@@ -414,7 +453,7 @@ def generate_client_side_replay(merged_df):
                             display: true,
                             position: 'right',
                             grid: {{ drawOnChartArea: false }},
-                            reverse: true,  // INVERTED AXIS: Lower split is higher/faster
+                            reverse: true,
                             title: {{ display: true, text: 'Split' }}
                         }}
                     }},
@@ -438,26 +477,67 @@ def generate_client_side_replay(merged_df):
                 plugins: [verticalLinePlugin]
             }});
 
-            // --- 4. Interaction Logic ---
+            // --- 5. Logic: Update Data Range based on Trim ---
+            function updateDataRange() {{
+                let start = parseInt(trimStartSlider.value);
+                let end = parseInt(trimEndSlider.value);
+
+                // Validation: Start cannot overlap End
+                if (start >= end) {{
+                    start = end - 1;
+                    trimStartSlider.value = start;
+                }}
+
+                // 1. Slice Data for Chart
+                const newLabels = rawLabels.slice(start, end + 1);
+                const newRate = rawRate.slice(start, end + 1);
+                const newSplit = rawSplit.slice(start, end + 1);
+
+                // 2. Update Chart
+                myChart.data.labels = newLabels;
+                myChart.data.datasets[0].data = newRate;
+                myChart.data.datasets[1].data = newSplit;
+                myChart.update(); // This triggers auto-scaling of Y axes!
+
+                // 3. Update Replay Slider Bounds
+                replaySlider.min = start;
+                replaySlider.max = end;
+                
+                // If replay slider is out of bounds, reset it
+                if (parseInt(replaySlider.value) < start) replaySlider.value = start;
+                if (parseInt(replaySlider.value) > end) replaySlider.value = end;
+
+                // 4. Update Display
+                updateDisplay(replaySlider.value);
+            }}
+
+            // --- 6. Logic: Update Display (Map + Stats) ---
             function updateDisplay(idx) {{
-                var pt = dataPoints[idx];
+                idx = parseInt(idx);
+                var pt = rawDataPoints[idx];
                 
-                marker.setLatLng([pt.lat, pt.lon]);
+                if (pt) {{
+                    marker.setLatLng([pt.lat, pt.lon]);
+                    document.getElementById("disp-rate").innerText = pt.rate;
+                    document.getElementById("disp-split").innerText = fmtSplit(pt.split);
+                    document.getElementById("disp-dist").innerText = pt.dist;
+                    document.getElementById("disp-time").innerText = pt.time;
+                }}
                 
-                document.getElementById("disp-rate").innerText = pt.rate;
-                // Format the split using the helper function
-                document.getElementById("disp-split").innerText = fmtSplit(pt.split);
-                document.getElementById("disp-dist").innerText = pt.dist;
-                document.getElementById("disp-time").innerText = pt.time;
-                
-                myChart.draw();
+                myChart.draw(); // Redraw vertical line
             }}
 
-            updateDisplay(0);
-
-            slider.oninput = function() {{
+            // --- Listeners ---
+            trimStartSlider.oninput = updateDataRange;
+            trimEndSlider.oninput = updateDataRange;
+            
+            replaySlider.oninput = function() {{
                 updateDisplay(this.value);
-            }}
+            }};
+
+            // Initial Call
+            updateDataRange();
+
         </script>
     </body>
     </html>
