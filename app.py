@@ -141,10 +141,6 @@ if uploaded_gpx is not None:
         # Parse the GPX file
         track_df = parse_gpx(uploaded_gpx)
 
-        #View Raw GPX Data 
-        with st.expander("📂 Raw GPX Data View (Click to expand)"):
-            st.write("Here is the raw data extracted from the GPX file:")
-            st.dataframe(track_df)
         st.subheader("Rowing Route")
         
         # Center map on the starting point
@@ -157,6 +153,11 @@ if uploaded_gpx is not None:
         
         # Render map in Streamlit
         st_folium(m, width=500, height=500)
+
+        #View Raw GPX Data 
+        with st.expander("📂 Raw GPX Data View (Click to expand)"):
+            st.write("Here is the raw data extracted from the GPX file:")
+            st.dataframe(track_df)
         
     except Exception as e:
         st.error(f"Error processing GPX: {e}")
@@ -169,8 +170,9 @@ if uploaded_csv is not None:
         df = pd.read_csv(uploaded_csv, header=1)
         
         # Display raw data snapshot
-        with st.expander("📂 Raw Data View"):
-            st.dataframe(df.head())
+        with st.expander("📂 Raw CSV Data View (Click to expand)"):
+            st.write("Here is the raw data extracted from the CSV file:")
+            st.dataframe(df)
         
         # Plot the stats
         plot_metrics(df)
