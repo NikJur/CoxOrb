@@ -59,17 +59,23 @@ def plot_metrics(df):
         The DataFrame containing CoxOrb CSV data.
     """
     # Streamlit's native line chart is interactive by default
-    # We assume standard CoxOrb columns; users may need to adjust column names
-    # Common columns: 'Stroke Rate', 'Speed', 'Distance', 'Power'
+    #1 Clean column names (remove extra spaces)
+    df.columns = [c.strip() for c in df.columns]
+
+    #2 Define the exact columns we want to plot based on your file format
+    #file format: Distance, Elapsed Time, Stroke Count, Rate, Check, Speed (mm:ss/500m), Speed (m/s), Distance/Stroke
+    wanted_cols = ['Rate', 'Speed (m/s)', 'Stroke Count', 'Distance/Stroke', 'Check']
     
-    available_cols = [c for c in ['Rate', 'Speed', 'Power', 'Stroke Rate'] if c in df.columns]
+    #3 Filter for columns that actually exist in the file
+    cols_to_plot = [c for c in wanted_cols if c in df.columns]
     
-    if available_cols:
+    if cols_to_plot:
         st.subheader("Performance Metrics")
-        st.line_chart(df[available_cols])
+        st.line_chart(df[cols_to_plot])
     else:
-        st.warning("Could not identify standard CoxOrb columns (Rate, Speed, Power).")
-        st.write("Available columns:", df.columns.tolist())
+        #Fallback if names still don't match
+        st.warning("Could not identify standard CoxOrb columns.")
+        st.write("Columns found in file:", df.columns.tolist())
 
 def send_simple_email(name, email, subject, message):
     """
@@ -146,11 +152,11 @@ if uploaded_gpx is not None:
 if uploaded_csv is not None:
     try:
         # Load CSV into Pandas DataFrame
-        # Skiprows might be needed depending on CoxOrb header format (often line 1 or 2)
-        df = pd.read_csv(uploaded_csv)
+        # header=1 tells pandas to ignore the first row ("COXORB Performance Data...") and use the second row as the actual column headers.
+        df = pd.read_csv(uploaded_csv, header=1)
         
         # Display raw data snapshot
-        with st.expander("Raw Data View"):
+        with st.expander("📂 Raw Data View"):
             st.dataframe(df.head())
         
         # Plot the stats
