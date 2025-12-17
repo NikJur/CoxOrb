@@ -91,7 +91,7 @@ def send_simple_email(name, email, subject, message):
 
     # Post the data to the API
     response = requests.post(api_url, data=payload)
-    return response.status_code
+    return response.status_code, response.text
 
 # --- Main App Logic ---
 
@@ -180,14 +180,12 @@ with st.form("contact_form", clear_on_submit=True):
         if not (name_input and email_input and message_input):
             st.error("Please fill in your name, email, and a message.")
         else:
-            # Attempt to send the email
-            status = send_simple_email(name_input, email_input, subject_input, message_input)
+            # Get both status and response text
+            status, response_text = send_simple_email(name_input, email_input, subject_input, message_input)
 
             if status == 200:
                 st.success("Message sent successfully! Thank you for your feedback; we will get back to you as soon as possible.")
             else:
-                # --- Debugging Code ---
-                st.error(f"Error {status}: There was an issue sending your message.")
-                #Rerun the function to get the text since we didn't return it (or modify the function)
-                #Actually, let's just modify the function slightly to be safe, or simpler:
-                st.write("Please check your Formspree dashboard or email.")
+                st.error(f"Failed to send. Status Code: {status}")
+                with st.expander("See Error Details"):
+                    st.text(response_text)
