@@ -4,3 +4,4 @@ gpxpy
 folium
 streamlit-folium
 matplotlib
+requests
