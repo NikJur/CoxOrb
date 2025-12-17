@@ -102,7 +102,7 @@ def plot_metrics(df):
         
         # If 'Distance' exists, set it as the index (X-axis)
         if 'Distance' in df.columns:
-            st.write("X-axis: Distance (m)")
+            st.write("X-axis: Distance (m). Graph lets you zoom-in for detailed analysis.")
             # We explicitly set the index to Distance for the chart
             chart_data = df.set_index('Distance')[cols_to_plot]
             st.line_chart(chart_data)
