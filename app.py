@@ -239,7 +239,7 @@ if uploaded_gpx is not None:
         Fullscreen().add_to(m)
         
         # Render map in Streamlit
-        st_folium(m, width=1200, height=500)
+        st_folium(m, width=1200, height=550)
 
         #View Raw GPX Data 
         with st.expander("📂 Raw GPX Data View (Click to expand)"):
