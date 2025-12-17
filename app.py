@@ -293,7 +293,7 @@ if gpx_df is not None and csv_df is not None:
             replay_html = generate_client_side_replay(merged_df_client)
             
             # Render the HTML component
-            components.html(replay_html, height=500)
+            components.html(replay_html, height=520)
         else:
             st.warning("Data could not be merged for the client-side view.")
 
