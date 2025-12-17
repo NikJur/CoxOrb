@@ -225,15 +225,12 @@ if gpx_df is not None and csv_df is not None:
 
     try:
         # A. PREPARE DATA
-        # 1. Drop rows where seconds_elapsed is NaN
         gpx_clean = gpx_df.dropna(subset=['seconds_elapsed']).copy()
         csv_clean = csv_df.dropna(subset=['seconds_elapsed']).copy()
         
-        # 2. Force both to Integer
         gpx_clean['seconds_elapsed'] = gpx_clean['seconds_elapsed'].astype(int)
         csv_clean['seconds_elapsed'] = csv_clean['seconds_elapsed'].astype(int)
         
-        # 3. Sort
         gpx_sorted = gpx_clean.sort_values('seconds_elapsed')
         csv_sorted = csv_clean.sort_values('seconds_elapsed')
 
@@ -249,14 +246,6 @@ if gpx_df is not None and csv_df is not None:
         merged_df = merged_df.dropna(subset=['latitude', 'longitude'])
 
         if not merged_df.empty:
-            # --- VIEWPORT CALCULATION (Run Once) ---
-            # We calculate the boundaries of the ENTIRE route.
-            # This ensures the map stays fixed while the dot moves.
-            min_lat, max_lat = gpx_df['latitude'].min(), gpx_df['latitude'].max()
-            min_lon, max_lon = gpx_df['longitude'].min(), gpx_df['longitude'].max()
-            center_lat = (min_lat + max_lat) / 2
-            center_lon = (min_lon + max_lon) / 2
-            
             # C. The Slider
             max_index = len(merged_df) - 1
             selected_index = st.slider("Select Point / Stroke", 0, max_index, 0)
@@ -280,13 +269,22 @@ if gpx_df is not None and csv_df is not None:
                 st.caption(f"Time: {time_str}")
 
             with col_map:
-                # --- MAP GENERATION ---
-                # 1. Center map on the COURSE CENTER (not the boat)
-                # 2. Set bounds to fit the whole course
-                m_interactive = folium.Map(location=[center_lat, center_lon], zoom_start=14)
+                # --- MAP GENERATION (Fixed Frame) ---
                 
-                # Fit the map to the course boundaries
-                m_interactive.fit_bounds([[min_lat, min_lon], [max_lat, max_lon]])
+                # 1. Calculate the bounding box of the ENTIRE GPX course
+                #    sw = South West (Min Lat, Min Lon)
+                #    ne = North East (Max Lat, Max Lon)
+                sw = [gpx_df['latitude'].min(), gpx_df['longitude'].min()]
+                ne = [gpx_df['latitude'].max(), gpx_df['longitude'].max()]
+                
+                # 2. Create Map centered roughly in the middle
+                center_lat = (sw[0] + ne[0]) / 2
+                center_lon = (sw[1] + ne[1]) / 2
+                m_interactive = folium.Map(location=[center_lat, center_lon], zoom_start=13)
+
+                # 3. CRITICAL: Force the map to fit the bounds of the whole course
+                #    We add a little padding so the start/finish aren't right on the edge.
+                m_interactive.fit_bounds([sw, ne])
 
                 # Full Path (Gray)
                 folium.PolyLine(
