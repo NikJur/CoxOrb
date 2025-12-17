@@ -153,9 +153,15 @@ def send_simple_email(name, email, subject, message):
 
 
 # --- Main App Logic ---
-st.image("logo.png", width = 500) #add logo as banner
+# --- Header with Logo ---
+col_logo, col_title = st.columns([3, 5]) # Adjust the ratio (1:5) to make the logo column smaller or larger
 
-st.title("CoxOrb Data Visualiser")
+with col_logo:
+    # Ensure 'logo.png' matches the exact name of the file you uploaded to GitHub
+    st.image("logo.png", width=120) 
+
+with col_title:
+    st.title("CoxOrb Data Visualiser")
     
 st.write("Upload your rowing data to view the route and analysis.")
 
