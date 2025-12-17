@@ -51,7 +51,8 @@ def parse_gpx(file_buffer):
 def plot_metrics(df):
     """
     Generates a line chart for rowing metrics (Rate/Speed) from CSV data.
-
+    Sets 'Distance' as the X-axis if available.
+    
     Parameters:
     -----------
     df : pd.DataFrame
@@ -70,11 +71,24 @@ def plot_metrics(df):
     
     if cols_to_plot:
         st.subheader("Performance Metrics")
-        st.line_chart(df[cols_to_plot])
-    else:
-        #Fallback if names still don't match
-        st.warning("Could not identify standard CoxOrb columns.")
-        st.write("Columns found in file:", df.columns.tolist())
+        
+        # If 'Distance' exists, set it as the index (X-axis)
+        if 'Distance' in df.columns:
+            st.write("X-axis: Distance (m)")
+            # We explicitly set the index to Distance for the chart
+            chart_data = df.set_index('Distance')[cols_to_plot]
+            st.line_chart(chart_data)
+        
+        # If no Distance, try 'Elapsed Time'
+        elif 'Elapsed Time' in df.columns:
+            st.write("X-axis: Time")
+            chart_data = df.set_index('Elapsed Time')[cols_to_plot]
+            st.line_chart(chart_data)
+            
+        # Fallback to Row Number (Stroke Count)
+        else:
+            st.write("X-axis: Stroke Number")
+            st.line_chart(df[cols_to_plot])
 
 def send_simple_email(name, email, subject, message):
     """
