@@ -15,7 +15,6 @@ try:
 except ImportError:
     st.error("Could not import 'html_utils.py'. Please make sure the file exists and is named correctly.")
 
-@st.cache_data
 def parse_time_str(time_str):
     """
     Parses time strings like '00:15:30' or '15:30.5' into total seconds.
@@ -41,7 +40,6 @@ def parse_time_str(time_str):
     except:
         return 0
 
-@st.cache_data
 def parse_gpx(file_buffer):
     """
     Parses a GPX file buffer and returns a DataFrame of coordinates. + add "seconds_elapsed" column to compare with csv files
@@ -84,7 +82,6 @@ def parse_gpx(file_buffer):
     
     return df
 
-@st.cache_data
 def plot_metrics(df):
     """
     Generates a line chart for rowing metrics (Rate/Speed) from CSV data.
@@ -175,7 +172,6 @@ def send_simple_email(name, email, subject, message):
     response = requests.post(api_url, data=payload)
     return response.status_code, response.text
 
-@st.cache_data
 def merge_datasets(gpx_df, csv_df):
     """
     Merges GPX and CSV data based on seconds_elapsed.
