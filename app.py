@@ -395,7 +395,7 @@ if tracks_to_plot:
                 color=track['color'], weight=3, opacity=0.7, tooltip=track['name']
             ).add_to(m_compare)
         
-        st_folium(m_compare, width=800, height=500, key="compare_map")
+        st_folium(m_compare, width=1200, height=500, key="compare_map")
         
         # Dynamic Legend
         st.markdown(
