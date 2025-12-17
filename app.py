@@ -263,7 +263,7 @@ if uploaded_csv is not None:
         if 'Speed (m/s)' in csv_df.columns:
         #Formula: 500 / Speed (m/s) = Seconds per 500m
         #use a lambda to handle division by zero or empty values safely
-        csv_df['Split (s/500m)'] = csv_df['Speed (m/s)'].apply(lambda x: 500/x if (pd.notnull(x) and x > 0) else 0)
+            csv_df['Split (s/500m)'] = csv_df['Speed (m/s)'].apply(lambda x: 500/x if (pd.notnull(x) and x > 0) else 0)
         
         # Display raw data snapshot
         with st.expander("📂 Raw CSV Data View (Click to expand)"):
