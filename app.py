@@ -92,7 +92,7 @@ def plot_metrics(df):
 
     #2 Define the exact columns we want to plot based on your file format
     #file format: Distance, Elapsed Time, Stroke Count, Rate, Check, Speed (mm:ss/500m), Speed (m/s), Distance/Stroke
-    wanted_cols = ['Rate', 'Split (m/s)', 'Distance/Stroke']
+    wanted_cols = ['Rate', 'Speed (m/s)', 'Distance/Stroke']
     
     #3 Filter for columns that actually exist in the file
     cols_to_plot = [c for c in wanted_cols if c in df.columns]
