@@ -31,8 +31,7 @@ def parse_gpx(file_buffer):
                 data.append({
                     'latitude': point.latitude,
                     'longitude': point.longitude,
-                    'time': point.time,
-                    'elevation': point.elevation
+                    'time': point.time
                 })
     df = pd.DataFrame(data)
 
