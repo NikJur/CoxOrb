@@ -152,7 +152,7 @@ def generate_client_side_replay(merged_df):
             #map {{ flex: 1; min-height: 250px; width: 100%; border-radius: 10px; }}
             
             .chart-container {{ 
-                height: 150px; /* Fixed height for chart */
+                height: 200px; /* Fixed height for chart */
                 width: 100%; 
                 margin-top: 10px;
                 flex-shrink: 0;
