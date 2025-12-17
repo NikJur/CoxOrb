@@ -330,7 +330,65 @@ if gpx_df is not None and csv_df is not None:
         st.error(f"Error in interactive section: {e}")
 
 
-# 5. Feedback Part on the Bottom of the page:
+# 5. Compare Two GPX Lines ---
+
+st.markdown("---")
+st.header("Compare two GPX lines")
+st.write("Upload two different GPX files to compare their steering lines side-by-side.")
+
+col_comp1, col_comp2 = st.columns(2)
+comp_gpx_1 = col_comp1.file_uploader("Upload Track 1 (Blue)", type=['gpx'], key="comp1")
+comp_gpx_2 = col_comp2.file_uploader("Upload Track 2 (Red)", type=['gpx'], key="comp2")
+
+if comp_gpx_1 and comp_gpx_2:
+    try:
+        # Parse both files
+        df_track1 = parse_gpx(comp_gpx_1)
+        df_track2 = parse_gpx(comp_gpx_2)
+        
+        # Calculate bounds that include BOTH tracks
+        min_lat = min(df_track1['latitude'].min(), df_track2['latitude'].min())
+        max_lat = max(df_track1['latitude'].max(), df_track2['latitude'].max())
+        min_lon = min(df_track1['longitude'].min(), df_track2['longitude'].min())
+        max_lon = max(df_track1['longitude'].max(), df_track2['longitude'].max())
+        
+        sw = [min_lat, min_lon]
+        ne = [max_lat, max_lon]
+        
+        # Create Map
+        m_compare = folium.Map(location=[(min_lat + max_lat)/2, (min_lon + max_lon)/2], zoom_start=13)
+        m_compare.fit_bounds([sw, ne])
+        
+        # Plot Track 1 (Blue)
+        folium.PolyLine(
+            list(zip(df_track1['latitude'], df_track1['longitude'])), 
+            color="blue", weight=3, opacity=0.7, tooltip="Track 1"
+        ).add_to(m_compare)
+        
+        # Plot Track 2 (Red)
+        folium.PolyLine(
+            list(zip(df_track2['latitude'], df_track2['longitude'])), 
+            color="red", weight=3, opacity=0.7, tooltip="Track 2"
+        ).add_to(m_compare)
+        
+        st_folium(m_compare, width=800, height=500, key="compare_map")
+        
+        # Add Legend/Key
+        st.markdown(
+            """
+            <div style="display: flex; gap: 20px; justify-content: center; margin-top: 10px;">
+                <span style="color: blue; font-weight: bold;">■ Track 1 (Blue)</span>
+                <span style="color: red; font-weight: bold;">■ Track 2 (Red)</span>
+            </div>
+            """, 
+            unsafe_allow_html=True
+        )
+
+    except Exception as e:
+        st.error(f"Error comparing GPX files: {e}")
+
+
+# 6. Feedback Part on the Bottom of the page:
 st.markdown("---")  # Horizontal rule for visual separation
 
 # 5.1. Developer Credits
