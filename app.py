@@ -10,20 +10,24 @@ def parse_time_str(time_str):
     """
     Parses time strings like '00:15:30' or '15:30.5' into total seconds.
     Used for the CSV 'Elapsed Time' column.
+    round to the nearest integer
     """
     try:
         if pd.isna(time_str): return 0
-        # If it's already a number (seconds), return it
-        if isinstance(time_str, (int, float)): return time_str
+        # If it's already a number, return the rounded integer
+        if isinstance(time_str, (int, float)): return int(round(time_str))
         
         parts = str(time_str).split(':')
+        total_seconds = 0.0
+        
         if len(parts) == 3: # HH:MM:SS
             h, m, s = parts
-            return int(h) * 3600 + int(m) * 60 + float(s)
+            total_seconds = int(h) * 3600 + int(m) * 60 + float(s)
         elif len(parts) == 2: # MM:SS
             m, s = parts
-            return int(m) * 60 + float(s)
-        return 0
+            total_seconds = int(m) * 60 + float(s)
+            
+        return int(round(total_seconds))
     except:
         return 0
 
