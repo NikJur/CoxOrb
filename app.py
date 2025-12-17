@@ -8,7 +8,7 @@ import requests #for sending the feedback data to email service
 
 def parse_gpx(file_buffer):
     """
-    Parses a GPX file buffer and returns a DataFrame of coordinates.
+    Parses a GPX file buffer and returns a DataFrame of coordinates. + add "seconds_elapsed" column to compare with csv files
 
     Parameters:
     -----------
@@ -34,8 +34,20 @@ def parse_gpx(file_buffer):
                     'time': point.time,
                     'elevation': point.elevation
                 })
+    df = pd.DataFrame(data)
+
+    #Convert absolute time to elapsed seconds
+    if not df.empty and 'time' in df.columns:
+        # Ensure time is in datetime format (gpxpy usually does this, but being safe)
+        df['time'] = pd.to_datetime(df['time'])
+        
+        # Get the start time (first entry)
+        start_time = df['time'].iloc[0]
+        
+        # Calculate difference and convert to total seconds
+        df['seconds_elapsed'] = (df['time'] - start_time).dt.total_seconds()
     
-    return pd.DataFrame(data)
+    return df
 
 def plot_metrics(df):
     """
