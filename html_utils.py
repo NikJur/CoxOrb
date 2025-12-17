@@ -52,7 +52,7 @@ def generate_audio_map_html(gpx_df, audio_bytes, audio_mime_type):
 
             // 3. Draw Route (Grey Background)
             var latlngs = routePoints.map(p => [p.latitude, p.longitude]);
-            var polyline = L.polyline(latlngs, {{color: 'grey', weight: 8, opacity: 0.6}}).addTo(map);
+            var polyline = L.polyline(latlngs, {{color: 'grey', weight: 6, opacity: 0.6}}).addTo(map);
             
             map.fitBounds(polyline.getBounds());
 
