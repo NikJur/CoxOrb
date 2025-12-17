@@ -152,8 +152,16 @@ def send_simple_email(name, email, subject, message):
     return response.status_code, response.text
 
 # --- Main App Logic ---
+# --- Header with Logo ---
+col_logo, col_title = st.columns([1, 5]) #ratio (1:5)
 
-st.title("CoxOrb Data Visualiser")
+with col_logo:
+    # Ensure 'logo.png' matches the exact name of the file you uploaded to GitHub
+    st.image("logo.png", width=120) 
+
+with col_title:
+    st.title("CoxOrb Data Visualiser")
+    
 st.write("Upload your rowing data to view the route and analysis.")
 
 # 1. File Uploaders
