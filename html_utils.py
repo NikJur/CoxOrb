@@ -1,4 +1,5 @@
 import json
+import pandas as pd
 import base64
 
 def generate_audio_map_html(gpx_df, audio_bytes, audio_mime_type):
@@ -94,26 +95,49 @@ def generate_audio_map_html(gpx_df, audio_bytes, audio_mime_type):
 
 def generate_client_side_replay(merged_df):
     """
-    Generates a lag-free, client-side interactive replay map with Fullscreen support.
+    Generates a lag-free, client-side interactive replay map with Fullscreen support
+    AND a synchronized performance chart.
     """
-    import json # Ensure json is imported inside or at top of file
-
+    
     # 1. Prepare Data for JS
+    # We create lists for the chart data to make it easy to inject
     export_data = []
+    
+    # Handle column names flexibly
+    rate_col = 'Rate' if 'Rate' in merged_df.columns else merged_df.columns[0] # Fallback
+    speed_col = 'Speed (m/s)'
+    dist_col = 'Distance'
+    dps_col = 'Distance/Stroke' 
+    if 'Dist/Stroke' in merged_df.columns: dps_col = 'Dist/Stroke'
+    
+    chart_labels = [] # X-axis labels (Distance)
+    data_rate = []
+    data_speed = []
+    data_dps = []
+
     for index, row in merged_df.iterrows():
+        # Map Data
         export_data.append({
             'lat': row['latitude'],
             'lon': row['longitude'],
-            'rate': row.get('Rate', 0),
-            'speed': row.get('Speed (m/s)', 0),
-            'dist': row.get('Distance', 0),
+            'rate': row.get(rate_col, 0),
+            'speed': row.get(speed_col, 0),
+            'dist': row.get(dist_col, 0),
             'time': str(row.get('Elapsed Time', '00:00')),
-            'seconds': row.get('seconds_elapsed', 0)
         })
+        
+        # Chart Data
+        # We use Distance as the X-axis label, rounding to whole numbers
+        dist_val = int(row.get(dist_col, 0))
+        chart_labels.append(dist_val)
+        
+        data_rate.append(row.get(rate_col, 0))
+        data_speed.append(row.get(speed_col, 0))
+        data_dps.append(row.get(dps_col, 0))
         
     json_data = json.dumps(export_data)
     
-    # 2. Define HTML Template with Fullscreen Plugin
+    # 2. Define HTML Template
     html_code = f"""
     <!DOCTYPE html>
     <html>
@@ -124,11 +148,20 @@ def generate_client_side_replay(merged_df):
         <script src='https://api.mapbox.com/mapbox.js/plugins/leaflet-fullscreen/v1.0.1/Leaflet.fullscreen.min.js'></script>
         <link href='https://api.mapbox.com/mapbox.js/plugins/leaflet-fullscreen/v1.0.1/leaflet.fullscreen.css' rel='stylesheet' />
 
+        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
         <style>
             body {{ font-family: sans-serif; margin: 0; padding: 0; }}
-            #map {{ height: 400px; width: 100%; border-radius: 10px; }}
             
-            /* Stats Grid Styling */
+            #map {{ height: 350px; width: 100%; border-radius: 10px; }}
+            
+            .chart-container {{ 
+                position: relative; 
+                height: 200px; 
+                width: 100%; 
+                margin-top: 15px;
+            }}
+
             .stats-grid {{ 
                 display: grid; 
                 grid-template-columns: repeat(4, 1fr); 
@@ -136,12 +169,11 @@ def generate_client_side_replay(merged_df):
                 margin-bottom: 10px; 
                 text-align: center;
             }}
-            .stat-box {{ background: white; padding: 8px; border-radius: 5px; border: 1px solid #ddd; }}
-            .stat-label {{ font-size: 12px; color: #666; display: block; }}
-            .stat-value {{ font-size: 18px; font-weight: bold; color: #333; }}
+            .stat-box {{ background: white; padding: 5px; border-radius: 5px; border: 1px solid #ddd; }}
+            .stat-label {{ font-size: 11px; color: #666; display: block; }}
+            .stat-value {{ font-size: 16px; font-weight: bold; color: #333; }}
 
-            /* Controls Styling */
-            .controls {{ margin-top: 15px; padding: 10px; background: #f9f9f9; border-radius: 10px; }}
+            .controls {{ margin-top: 10px; padding: 10px; background: #f9f9f9; border-radius: 10px; }}
             .slider-container {{ width: 100%; display: flex; align-items: center; gap: 10px; }}
             input[type=range] {{ width: 100%; cursor: pointer; }}
         </style>
@@ -157,47 +189,50 @@ def generate_client_side_replay(merged_df):
 
         <div id="map"></div>
 
+        <div class="chart-container">
+            <canvas id="perfChart"></canvas>
+        </div>
+
         <div class="controls">
             <div class="slider-container">
-                <span>Start</span>
+                <span style="font-size:12px;">Start</span>
                 <input type="range" id="replaySlider" min="0" max="100" value="0">
-                <span>End</span>
+                <span style="font-size:12px;">End</span>
             </div>
-            <div style="text-align:center; margin-top:5px; color:#888; font-size:12px;">
-                Drag slider to replay instantly
+            <div style="text-align:center; margin-top:2px; color:#888; font-size:10px;">
+                Drag to replay • Chart indicates current stroke
             </div>
         </div>
 
         <script>
-            // 1. Load Data
+            // --- 1. Load Data ---
             var dataPoints = {json_data};
-            var maxIdx = dataPoints.length - 1;
+            var chartLabels = {chart_labels};
+            var rateData = {data_rate};
+            var speedData = {data_speed};
+            var dpsData = {data_dps};
             
+            var maxIdx = dataPoints.length - 1;
             var slider = document.getElementById("replaySlider");
             slider.max = maxIdx;
 
-            // 2. Initialize Map
+            // --- 2. Initialize Map ---
             var startLat = dataPoints[0].lat;
             var startLon = dataPoints[0].lon;
             
             var map = L.map('map', {{
-                fullscreenControl: true, // Enable fullscreen button
-                fullscreenControlOptions: {{
-                    position: 'topleft'
-                }}
+                fullscreenControl: true,
+                fullscreenControlOptions: {{ position: 'topleft' }}
             }}).setView([startLat, startLon], 14);
 
             L.tileLayer('https://{{s}}.tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png', {{
-                maxZoom: 19,
-                attribution: '© OpenStreetMap'
+                maxZoom: 19, attribution: '© OpenStreetMap'
             }}).addTo(map);
 
-            // 3. Draw Route
             var latlngs = dataPoints.map(p => [p.lat, p.lon]);
             var polyline = L.polyline(latlngs, {{color: 'blue', weight: 3, opacity: 0.6}}).addTo(map);
             map.fitBounds(polyline.getBounds());
 
-            // 4. Create Boat Marker
             var boatIcon = L.divIcon({{
                 className: 'boat-marker',
                 html: "<div style='background-color:red; width: 14px; height: 14px; border-radius: 50%; border: 2px solid white; box-shadow: 0 0 4px rgba(0,0,0,0.5);'></div>",
@@ -206,17 +241,116 @@ def generate_client_side_replay(merged_df):
             }});
             var marker = L.marker([startLat, startLon], {{icon: boatIcon}}).addTo(map);
 
-            // 5. Interaction Logic
+            // --- 3. Initialize Chart ---
+            var ctx = document.getElementById('perfChart').getContext('2d');
+            
+            // Custom Plugin to draw vertical line at current index
+            const verticalLinePlugin = {{
+                id: 'verticalLine',
+                defaults: {{ color: 'red', width: 2 }},
+                afterDraw: (chart, args, options) => {{
+                    if (chart.tooltip?._active?.length) return; // Don't draw if tooltip active (optional)
+                    
+                    const idx = parseInt(slider.value); // Get current slider value
+                    const meta = chart.getDatasetMeta(0);
+                    const x = meta.data[idx].x;
+                    const top = chart.chartArea.top;
+                    const bottom = chart.chartArea.bottom;
+                    const ctx = chart.ctx;
+
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.moveTo(x, top);
+                    ctx.lineTo(x, bottom);
+                    ctx.lineWidth = options.width;
+                    ctx.strokeStyle = options.color;
+                    ctx.stroke();
+                    ctx.restore();
+                }}
+            }};
+
+            var myChart = new Chart(ctx, {{
+                type: 'line',
+                data: {{
+                    labels: chartLabels,
+                    datasets: [
+                        {{
+                            label: 'Rate (SPM)',
+                            data: rateData,
+                            borderColor: 'orange',
+                            borderWidth: 1.5,
+                            pointRadius: 0,
+                            yAxisID: 'y'
+                        }},
+                        {{
+                            label: 'Speed (m/s)',
+                            data: speedData,
+                            borderColor: 'green',
+                            borderWidth: 1.5,
+                            pointRadius: 0,
+                            yAxisID: 'y1'
+                        }},
+                        {{
+                            label: 'Dist/Stroke',
+                            data: dpsData,
+                            borderColor: 'purple',
+                            borderWidth: 1.5,
+                            pointRadius: 0,
+                            yAxisID: 'y1', // Share right axis with speed
+                            hidden: true // Hide by default to avoid clutter
+                        }}
+                    ]
+                }},
+                options: {{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {{ mode: 'index', intersect: false }},
+                    animation: false, // Disable animation for performance
+                    scales: {{
+                        x: {{ 
+                            title: {{ display: true, text: 'Distance (m)' }},
+                            ticks: {{ maxTicksLimit: 10 }}
+                        }},
+                        y: {{
+                            type: 'linear',
+                            display: true,
+                            position: 'left',
+                            title: {{ display: true, text: 'Rate' }}
+                        }},
+                        y1: {{
+                            type: 'linear',
+                            display: true,
+                            position: 'right',
+                            grid: {{ drawOnChartArea: false }}, // only want the grid lines for one axis
+                            title: {{ display: true, text: 'Speed / DPS' }}
+                        }}
+                    }},
+                    plugins: {{
+                        verticalLine: {{ color: 'red', width: 1.5 }}
+                    }}
+                }},
+                plugins: [verticalLinePlugin]
+            }});
+
+            // --- 4. Interaction Logic ---
             function updateDisplay(idx) {{
                 var pt = dataPoints[idx];
+                
+                // Update Map
                 marker.setLatLng([pt.lat, pt.lon]);
                 
+                // Update Stats
                 document.getElementById("disp-rate").innerText = pt.rate;
                 document.getElementById("disp-speed").innerText = pt.speed;
                 document.getElementById("disp-dist").innerText = pt.dist;
                 document.getElementById("disp-time").innerText = pt.time;
+                
+                // Update Chart Vertical Line
+                // We just need to trigger a re-render of the chart so the plugin draws the line at new slider pos
+                myChart.draw();
             }}
 
+            // Start
             updateDisplay(0);
 
             slider.oninput = function() {{
