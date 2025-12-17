@@ -237,10 +237,10 @@ def generate_client_side_replay(merged_df):
         <style>
             body {{ font-family: sans-serif; margin: 0; padding: 0; display: flex; flex-direction: column; height: 100vh; }}
             
-            #map {{ flex: 1; min-height: 250px; width: 100%; border-radius: 10px; }}
+            #map {{ flex: 1; min-height: 230px; width: 100%; border-radius: 10px; }}
             
             .chart-container {{ 
-                height: 200px; 
+                height: 180px; 
                 width: 100%; 
                 margin-top: 10px;
                 flex-shrink: 0;
