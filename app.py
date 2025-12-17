@@ -340,7 +340,7 @@ st.write("Upload up to three different GPX files to compare their steering lines
 col_comp1, col_comp2, col_comp3 = st.columns(3)
 comp_gpx_1 = col_comp1.file_uploader("Upload Track 1 (Blue)", type=['gpx'], key="comp1")
 comp_gpx_2 = col_comp2.file_uploader("Upload Track 2 (Red)", type=['gpx'], key="comp2")
-comp_gpx_3 = col_comp3.file_uploader("Upload Track 3 (Green)", type=['gpx'], key="comp3")
+comp_gpx_3 = col_comp3.file_uploader("Upload Track 3 (Black)", type=['gpx'], key="comp3")
 
 # List to store successfully parsed tracks
 tracks_to_plot = []
