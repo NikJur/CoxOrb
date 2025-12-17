@@ -6,6 +6,8 @@ from streamlit_folium import st_folium
 import matplotlib.pyplot as plt
 import requests #for sending the feedback data to email service
 from folium.plugins import Fullscreen
+import streamlit.components.v1 as components
+from html_utils import generate_audio_map_html
 
 def parse_time_str(time_str):
     """
@@ -338,6 +340,23 @@ if gpx_df is not None and csv_df is not None:
             
     except Exception as e:
         st.error(f"Error in interactive section: {e}")
+
+# 6. --- Audio Analysis Section ---
+st.markdown("---")
+st.header("Audio Analysis - UNDER CONSTRUCTION")
+st.write("Upload an audio recording (e.g., Cox recording) to play it in sync with the map.")
+
+#uploaded_audio = st.file_uploader("Upload Audio File (MP3/WAV)", type=['mp3', 'wav', 'm4a', 'ogg'])
+
+#if gpx_df is not None and uploaded_audio is not None:
+#    st.write("Loading audio player and map sync...")
+    
+#    if 'seconds_elapsed' in gpx_df.columns:
+        # Calls the function from utils.py
+#        audio_html = generate_audio_map_html(gpx_df, uploaded_audio.getvalue(), uploaded_audio.type)
+#        components.html(audio_html, height=550)
+#    else:
+#        st.error("GPX data does not have time info required for sync.")
 
 
 # 5. Compare Two GPX Lines ---
