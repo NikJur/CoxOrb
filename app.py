@@ -333,59 +333,77 @@ if gpx_df is not None and csv_df is not None:
 # 5. Compare Two GPX Lines ---
 
 st.markdown("---")
-st.header("Compare two GPX lines")
-st.write("Upload two different GPX files to compare their steering lines side-by-side.")
+st.header("Compare GPX Lines")
+st.write("Upload up to three different GPX files to compare their steering lines side-by-side.")
 
-col_comp1, col_comp2 = st.columns(2)
+# Create 3 columns for uploaders
+col_comp1, col_comp2, col_comp3 = st.columns(3)
 comp_gpx_1 = col_comp1.file_uploader("Upload Track 1 (Blue)", type=['gpx'], key="comp1")
 comp_gpx_2 = col_comp2.file_uploader("Upload Track 2 (Red)", type=['gpx'], key="comp2")
+comp_gpx_3 = col_comp3.file_uploader("Upload Track 3 (Green)", type=['gpx'], key="comp3")
 
-if comp_gpx_1 and comp_gpx_2:
+# List to store successfully parsed tracks
+tracks_to_plot = []
+
+# Parse available files
+if comp_gpx_1:
     try:
-        # Parse both files
-        df_track1 = parse_gpx(comp_gpx_1)
-        df_track2 = parse_gpx(comp_gpx_2)
+        tracks_to_plot.append({'data': parse_gpx(comp_gpx_1), 'color': 'blue', 'name': 'Track 1'})
+    except Exception as e:
+        st.error(f"Error parsing Track 1: {e}")
+
+if comp_gpx_2:
+    try:
+        tracks_to_plot.append({'data': parse_gpx(comp_gpx_2), 'color': 'red', 'name': 'Track 2'})
+    except Exception as e:
+        st.error(f"Error parsing Track 2: {e}")
+
+if comp_gpx_3:
+    try:
+        tracks_to_plot.append({'data': parse_gpx(comp_gpx_3), 'color': 'black', 'name': 'Track 3'})
+    except Exception as e:
+        st.error(f"Error parsing Track 3: {e}")
+
+if tracks_to_plot:
+    try:
+        # Calculate combined bounds for all uploaded tracks
+        # We concatenate all latitude series and all longitude series to find absolute min/max
+        all_lats = pd.concat([t['data']['latitude'] for t in tracks_to_plot])
+        all_lons = pd.concat([t['data']['longitude'] for t in tracks_to_plot])
         
-        # Calculate bounds that include BOTH tracks
-        min_lat = min(df_track1['latitude'].min(), df_track2['latitude'].min())
-        max_lat = max(df_track1['latitude'].max(), df_track2['latitude'].max())
-        min_lon = min(df_track1['longitude'].min(), df_track2['longitude'].min())
-        max_lon = max(df_track1['longitude'].max(), df_track2['longitude'].max())
+        min_lat, max_lat = all_lats.min(), all_lats.max()
+        min_lon, max_lon = all_lons.min(), all_lons.max()
         
         sw = [min_lat, min_lon]
         ne = [max_lat, max_lon]
         
-        # Create Map
+        # Create Map centered roughly in the middle
         m_compare = folium.Map(location=[(min_lat + max_lat)/2, (min_lon + max_lon)/2], zoom_start=13)
         m_compare.fit_bounds([sw, ne])
         
-        # Plot Track 1 (Blue)
-        folium.PolyLine(
-            list(zip(df_track1['latitude'], df_track1['longitude'])), 
-            color="blue", weight=3, opacity=0.7, tooltip="Track 1"
-        ).add_to(m_compare)
+        # Plot each track
+        for track in tracks_to_plot:
+            folium.PolyLine(
+                list(zip(track['data']['latitude'], track['data']['longitude'])), 
+                color=track['color'], weight=3, opacity=0.7, tooltip=track['name']
+            ).add_to(m_compare)
         
-        # Plot Track 2 (Red)
-        folium.PolyLine(
-            list(zip(df_track2['latitude'], df_track2['longitude'])), 
-            color="red", weight=3, opacity=0.7, tooltip="Track 2"
-        ).add_to(m_compare)
+        st_folium(m_compare, width=500, height=500, key="compare_map")
         
-        st_folium(m_compare, width=800, height=500, key="compare_map")
-        
-        # Add Legend/Key
+        # Dynamic Legend
         st.markdown(
             """
             <div style="display: flex; gap: 20px; justify-content: center; margin-top: 10px;">
                 <span style="color: blue; font-weight: bold;">■ Track 1 (Blue)</span>
                 <span style="color: red; font-weight: bold;">■ Track 2 (Red)</span>
+                <span style="color: black; font-weight: bold;">■ Track 3 (Black)</span>
             </div>
             """, 
             unsafe_allow_html=True
         )
 
     except Exception as e:
-        st.error(f"Error comparing GPX files: {e}")
+        st.error(f"Error processing comparison map: {e}")
 
 
 # 6. Feedback Part on the Bottom of the page:
