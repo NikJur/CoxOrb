@@ -224,17 +224,16 @@ if gpx_df is not None and csv_df is not None:
     st.write("Move the slider to see stats and location at that specific moment.")
 
     try:
-        # A. PREPARE DATA FOR MERGE (The Fix for 'incompatible merge keys')
-        
-        # 1. Drop rows where seconds_elapsed might be NaN/missing
+        # A. PREPARE DATA
+        # 1. Drop rows where seconds_elapsed is NaN
         gpx_clean = gpx_df.dropna(subset=['seconds_elapsed']).copy()
         csv_clean = csv_df.dropna(subset=['seconds_elapsed']).copy()
         
-        # 2. Force both to Integer type
+        # 2. Force both to Integer
         gpx_clean['seconds_elapsed'] = gpx_clean['seconds_elapsed'].astype(int)
         csv_clean['seconds_elapsed'] = csv_clean['seconds_elapsed'].astype(int)
         
-        # 3. Sort by time
+        # 3. Sort
         gpx_sorted = gpx_clean.sort_values('seconds_elapsed')
         csv_sorted = csv_clean.sort_values('seconds_elapsed')
 
@@ -250,11 +249,19 @@ if gpx_df is not None and csv_df is not None:
         merged_df = merged_df.dropna(subset=['latitude', 'longitude'])
 
         if not merged_df.empty:
+            # --- VIEWPORT CALCULATION (Run Once) ---
+            # We calculate the boundaries of the ENTIRE route.
+            # This ensures the map stays fixed while the dot moves.
+            min_lat, max_lat = gpx_df['latitude'].min(), gpx_df['latitude'].max()
+            min_lon, max_lon = gpx_df['longitude'].min(), gpx_df['longitude'].max()
+            center_lat = (min_lat + max_lat) / 2
+            center_lon = (min_lon + max_lon) / 2
+            
             # C. The Slider
             max_index = len(merged_df) - 1
             selected_index = st.slider("Select Point / Stroke", 0, max_index, 0)
             
-            # Get the specific row data
+            # Get current row
             current_row = merged_df.iloc[selected_index]
             
             # D. Layout
@@ -273,10 +280,15 @@ if gpx_df is not None and csv_df is not None:
                 st.caption(f"Time: {time_str}")
 
             with col_map:
-                boat_loc = [current_row['latitude'], current_row['longitude']]
-                m_interactive = folium.Map(location=boat_loc, zoom_start=16)
+                # --- MAP GENERATION ---
+                # 1. Center map on the COURSE CENTER (not the boat)
+                # 2. Set bounds to fit the whole course
+                m_interactive = folium.Map(location=[center_lat, center_lon], zoom_start=14)
+                
+                # Fit the map to the course boundaries
+                m_interactive.fit_bounds([[min_lat, min_lon], [max_lat, max_lon]])
 
-                # Context Path (Gray)
+                # Full Path (Gray)
                 folium.PolyLine(
                     list(zip(gpx_df['latitude'], gpx_df['longitude'])), 
                     color="gray", weight=2, opacity=0.5
@@ -292,6 +304,7 @@ if gpx_df is not None and csv_df is not None:
                     ).add_to(m_interactive)
 
                 # Boat Dot
+                boat_loc = [current_row['latitude'], current_row['longitude']]
                 folium.CircleMarker(
                     location=boat_loc, radius=8, color="red", fill=True, fill_color="red"
                 ).add_to(m_interactive)
