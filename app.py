@@ -282,7 +282,7 @@ if uploaded_csv is not None:
 if gpx_df is not None and csv_df is not None:
     st.markdown("---")
     st.subheader("Interactive Replay")
-    st.caption("This runs entirely in your browser. Drag the slider for instant feedback. Click on the graph legend items to select/deselect.")
+    st.caption("This runs entirely in your browser. Drag the slider for instant feedback. Click on the graph legend items to select/deselect them. If there are stationary periods at the beginning or end of your recording, trim them with the sliders to rescale the y-axes.")
 
     try:
         # Re-merge using the cached function (instant)
