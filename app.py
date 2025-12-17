@@ -160,20 +160,24 @@ c1, c2 = st.columns(2)
 uploaded_gpx = c1.file_uploader("Upload GPX", type=['gpx'])
 uploaded_csv = c2.file_uploader("Upload CSV (we recommend GRAPH over SPLIT)", type=['csv'])
 
+# Holders for dataframes so we can access them later for the combined map
+gpx_df = None
+csv_df = None
+
 # 2. Process and Plot GPX (Map + Raw View)
 if uploaded_gpx is not None:
     try:
         # Parse the GPX file
-        track_df = parse_gpx(uploaded_gpx)
+        gpx_df = parse_gpx(uploaded_gpx)
 
         st.subheader("Rowing Route")
         
         # Center map on the starting point
-        start_location = [track_df['latitude'].iloc[0], track_df['longitude'].iloc[0]]
+        start_location = [gpx_df['latitude'].iloc[0], gpx_df['longitude'].iloc[0]]
         m = folium.Map(location=start_location, zoom_start=14)
         
         # Draw the route line (PolyLine)
-        coordinates = list(zip(track_df['latitude'], track_df['longitude']))
+        coordinates = list(zip(gpx_df['latitude'], gpx_df['longitude']))
         folium.PolyLine(coordinates, color="blue", weight=2.5, opacity=1).add_to(m)
         
         # Render map in Streamlit
@@ -182,7 +186,7 @@ if uploaded_gpx is not None:
         #View Raw GPX Data 
         with st.expander("📂 Raw GPX Data View (Click to expand)"):
             st.write("Here is the raw data extracted from the GPX file:")
-            st.dataframe(track_df)
+            st.dataframe(gpx_df)
         
     except Exception as e:
         st.error(f"Error processing GPX: {e}")
@@ -192,22 +196,22 @@ if uploaded_csv is not None:
     try:
         # Load CSV into Pandas DataFrame
         # header=1 tells pandas to ignore the first row ("COXORB Performance Data...") and use the second row as the actual column headers.
-        df = pd.read_csv(uploaded_csv, header=1)
+        csv_df = pd.read_csv(uploaded_csv, header=1)
 
         # Clean column names
-        df.columns = [c.strip() for c in df.columns]
+        csv_df.columns = [c.strip() for c in csv_df.columns]
 
         #Convert 'Elapsed Time' string to 'seconds_elapsed' float ---
-        if 'Elapsed Time' in df.columns:
-            df['seconds_elapsed'] = df['Elapsed Time'].apply(parse_time_str)
+        if 'Elapsed Time' in csv_df.columns:
+            csv_df['seconds_elapsed'] = csv_df['Elapsed Time'].apply(parse_time_str)
         
         # Display raw data snapshot
         with st.expander("📂 Raw CSV Data View (Click to expand)"):
             st.write("Here is the raw data extracted from the CSV file:")
-            st.dataframe(df)
+            st.dataframe(csv_df)
         
         # Plot the stats
-        plot_metrics(df)
+        plot_metrics(csv_df)
         
     except Exception as e:
         st.error(f"Error processing CSV: {e}")
