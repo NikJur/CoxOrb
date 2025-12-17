@@ -5,6 +5,7 @@ import folium
 from streamlit_folium import st_folium
 import matplotlib.pyplot as plt
 import requests #for sending the feedback data to email service
+from folium.plugins import Fullscreen
 
 def parse_time_str(time_str):
     """
@@ -380,6 +381,9 @@ if tracks_to_plot:
         # Create Map centered roughly in the middle
         m_compare = folium.Map(location=[(min_lat + max_lat)/2, (min_lon + max_lon)/2], zoom_start=13)
         m_compare.fit_bounds([sw, ne])
+
+        # Add Fullscreen Button
+        Fullscreen().add_to(m_compare)
         
         # Plot each track
         for track in tracks_to_plot:
