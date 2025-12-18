@@ -285,16 +285,40 @@ else:
         """
     )
 
-# 1. File Uploaders
-c1, c2 = st.columns(2)
-uploaded_gpx = c1.file_uploader("Upload GPX", type=['gpx'])
-uploaded_csv = c2.file_uploader("Upload CSV (we recommend GRAPH over SPLIT)", type=['csv'])
-
 # Holders for dataframes so we can access them later for the combined map
 gpx_df = None
 csv_df = None
 gpx_bytes = None
 csv_file = None
+
+# 4. Logic: Either Load Demo Data OR Show Uploaders
+if demo_mode:
+    # --- DEMO MODE ---
+    try:
+        # REPLACE THESE URLs with your actual raw GitHub URLs
+        gpx_url = "https://raw.githubusercontent.com/NikJur/coxorb-visualiser/main/demo_data/example.gpx"
+        csv_url = "https://raw.githubusercontent.com/NikJur/coxorb-visualiser/main/demo_data/example.csv"
+        
+        with st.spinner("Downloading demo data..."):
+            gpx_response = requests.get(gpx_url)
+            csv_response = requests.get(csv_url)
+            
+            if gpx_response.status_code == 200 and csv_response.status_code == 200:
+                gpx_bytes = gpx_response.content
+                # For CSV, we need a file-like object for pandas
+                from io import StringIO
+                csv_file = StringIO(csv_response.text)
+                st.success("Demo data loaded successfully!")
+            else:
+                st.error("Could not download demo files from GitHub. Please check the URLs.")
+    except Exception as e:
+        st.error(f"Error loading demo: {e}")
+
+else:
+    # --- UPLOAD MODE ---
+    c1, c2 = st.columns(2)
+    uploaded_gpx = c1.file_uploader("Upload GPX", type=['gpx'])
+    uploaded_csv = c2.file_uploader("Upload CSV", type=['csv'])
 
 # 2. Process and Plot GPX (Map + Raw View)
 if uploaded_gpx is not None:
