@@ -7,7 +7,16 @@ import matplotlib.pyplot as plt
 import requests #for sending the feedback data to email service
 from folium.plugins import Fullscreen
 import streamlit.components.v1 as components
-from html_utils import generate_audio_map_html
+from html_utils import generate_audio_map_html, generate_client_side_replay
+
+#set format to wide desktop screen:
+st.set_page_config(layout="wide", page_title="CoxOrb Data Visualiser")
+
+#check:
+try:
+    from html_utils import generate_audio_map_html, generate_client_side_replay
+except ImportError:
+    st.error("Could not import 'html_utils.py'. Please make sure the file exists and is named correctly.")
 
 def parse_time_str(time_str):
     """
@@ -80,43 +89,112 @@ def plot_metrics(df):
     """
     Generates a line chart for rowing metrics (Rate/Speed) from CSV data.
     Sets 'Distance' as the X-axis if available.
+    Allows user to select which metrics to plot.
+    Generates a Dual-Axis line chart.
+    Left Axis: Rate, Distance/Stroke, Check
+    Right Axis (Inverted): Split (formatted as mm:ss.t)
     
     Parameters:
     -----------
     df : pd.DataFrame
         The DataFrame containing CoxOrb CSV data.
     """
-    # Streamlit's native line chart is interactive by default
-    #1 Clean column names (remove extra spaces)
+    import altair as alt
+
+    # 1. Clean column names (Remove the rename logic!)
     df.columns = [c.strip() for c in df.columns]
 
-    #2 Define the exact columns we want to plot based on your file format
-    #file format: Distance, Elapsed Time, Stroke Count, Rate, Check, Speed (mm:ss/500m), Speed (m/s), Distance/Stroke
-    wanted_cols = ['Rate', 'Speed (m/s)', 'Distance/Stroke']
-    
-    #3 Filter for columns that actually exist in the file
-    cols_to_plot = [c for c in wanted_cols if c in df.columns]
-    
-    if cols_to_plot:
-        st.subheader("Performance Metrics")
+    # 2. Define Metrics (Include Speed AND Split)
+    wanted_cols = ['Rate', 'Split (s/500m)', 'Speed (m/s)', 'Distance/Stroke', 'Check']
+    available_cols = [c for c in wanted_cols if c in df.columns]
+
+    # 3. Create Formatted Split Column for Tooltips (mm:ss.t)
+    if 'Split (s/500m)' in df.columns:
+        def fmt_split(secs):
+            if pd.isna(secs) or secs <= 0: return "-"
+            m = int(secs // 60)
+            s = secs % 60
+            return f"{m}:{s:04.1f}"
         
-        # If 'Distance' exists, set it as the index (X-axis)
-        if 'Distance' in df.columns:
-            st.write("X-axis: Distance (m)")
-            # We explicitly set the index to Distance for the chart
-            chart_data = df.set_index('Distance')[cols_to_plot]
-            st.line_chart(chart_data)
+        df['Split_Formatted'] = df['Split (s/500m)'].apply(fmt_split)
+
+    if available_cols:
+        st.subheader("Performance Metrics (Static Plot)")
         
-        # If no Distance, try 'Elapsed Time'
-        elif 'Elapsed Time' in df.columns:
-            st.write("X-axis: Time")
-            chart_data = df.set_index('Elapsed Time')[cols_to_plot]
-            st.line_chart(chart_data)
+        # Default defaults: Rate and Split
+        default_cols = [c for c in available_cols]
+        if not default_cols: default_cols = available_cols[:1]
+
+        cols_to_plot = st.multiselect(
+            "Select metrics to plot (unselect Splits to alter the left Y-axis):", 
+            options=available_cols, 
+            default=default_cols
+        )
+
+        if cols_to_plot:
+            # Determine X-axis
+            if 'Distance' in df.columns:
+                x_axis = 'Distance'
+                x_title = "Distance (m)"
+            elif 'Elapsed Time' in df.columns:
+                x_axis = 'Elapsed Time'
+                x_title = "Time"
+            else:
+                x_axis = 'index'
+                df = df.reset_index()
+                x_title = "Stroke Number"
+
+            # --- BUILD ALTAIR LAYERS ---
+            layers = []
             
-        # Fallback to Row Number (Stroke Count)
+            # 1. Handle "Split" (Right Axis, Inverted, Green)
+            if 'Split (s/500m)' in cols_to_plot:
+                split_layer = alt.Chart(df).mark_line(color='#2ca02c').encode(
+                    x=alt.X(x_axis, title=x_title),
+                    y=alt.Y('Split (s/500m)', 
+                            title='Split (s/500m)',
+                            scale=alt.Scale(reverse=True, zero=False), # Inverted
+                            axis=alt.Axis(orient='right', titleColor='#2ca02c')), 
+                    tooltip=[
+                        alt.Tooltip(x_axis, title=x_title),
+                        alt.Tooltip('Split_Formatted', title='Split (mm:ss.t)'),
+                        alt.Tooltip('Split (s/500m)', title='Raw Seconds')
+                    ]
+                )
+                layers.append(split_layer)
+
+            # 2. Handle Other Metrics (Left Axis - Rate, Speed, etc.)
+            # We filter out 'Split (s/500m)' so it doesn't appear on the left
+            left_metrics = [c for c in cols_to_plot if c != 'Split (s/500m)']
+            
+            if left_metrics:
+                # Melt data for left metrics
+                left_data = df[[x_axis] + left_metrics].melt(x_axis, var_name='Metric', value_name='Value')
+                
+                left_layer = alt.Chart(left_data).mark_line().encode(
+                    x=alt.X(x_axis, title=x_title),
+                    y=alt.Y('Value', title=' / '.join(left_metrics), scale=alt.Scale(zero=False)),
+                    color=alt.Color('Metric', legend=alt.Legend(orient='bottom')),
+                    tooltip=[x_axis, 'Metric', 'Value']
+                )
+                layers.append(left_layer)
+
+            if layers:
+                # Combine layers
+                combined_chart = alt.layer(*layers).resolve_scale(
+                    y='independent'
+                ).properties(
+                    height=500,
+                    width='container'
+                ).interactive()
+
+                st.altair_chart(combined_chart, use_container_width=True)
+            else:
+                st.info("Please select a metric.")
         else:
-            st.write("X-axis: Stroke Number")
-            st.line_chart(df[cols_to_plot])
+            st.info("Select at least one metric to view the plot.")
+    else:
+        st.warning("Could not identify standard CoxOrb columns for the graph.")
 
 def send_simple_email(name, email, subject, message):
     """
@@ -153,6 +231,30 @@ def send_simple_email(name, email, subject, message):
     response = requests.post(api_url, data=payload)
     return response.status_code, response.text
 
+def merge_datasets(gpx_df, csv_df):
+    """
+    Merges GPX and CSV data based on seconds_elapsed.
+    Cached because merge_asof is expensive to run on every slider move.
+    """
+    gpx_clean = gpx_df.dropna(subset=['seconds_elapsed']).copy()
+    csv_clean = csv_df.dropna(subset=['seconds_elapsed']).copy()
+    
+    gpx_clean['seconds_elapsed'] = gpx_clean['seconds_elapsed'].astype(int)
+    csv_clean['seconds_elapsed'] = csv_clean['seconds_elapsed'].astype(int)
+    
+    gpx_sorted = gpx_clean.sort_values('seconds_elapsed')
+    csv_sorted = csv_clean.sort_values('seconds_elapsed')
+
+    merged_df = pd.merge_asof(
+        csv_sorted, 
+        gpx_sorted[['seconds_elapsed', 'latitude', 'longitude']], 
+        on='seconds_elapsed', 
+        direction='nearest',
+        tolerance=5 
+    )
+    
+    return merged_df.dropna(subset=['latitude', 'longitude'])
+
 
 # --- Main App Logic ---
 
@@ -162,7 +264,7 @@ with c2:
     # Use the logo as the main title
     st.image("logo.png", use_container_width=True)
     
-st.write("Upload your rowing data to view the route and analysis.")
+st.write("Upload your rowing data to view the route and analysis. Upload both GPX and CSV files to enable the interactive slider replay.")
 
 # 1. File Uploaders
 c1, c2 = st.columns(2)
@@ -193,7 +295,7 @@ if uploaded_gpx is not None:
         Fullscreen().add_to(m)
         
         # Render map in Streamlit
-        st_folium(m, width=1200, height=500)
+        st_folium(m, width=1200, height=550)
 
         #View Raw GPX Data 
         with st.expander("📂 Raw GPX Data View (Click to expand)"):
@@ -216,6 +318,12 @@ if uploaded_csv is not None:
         #Convert 'Elapsed Time' string to 'seconds_elapsed' float ---
         if 'Elapsed Time' in csv_df.columns:
             csv_df['seconds_elapsed'] = csv_df['Elapsed Time'].apply(parse_time_str)
+
+        #convert speed to splits
+        if 'Speed (m/s)' in csv_df.columns:
+        #Formula: 500 / Speed (m/s) = Seconds per 500m
+        #use a lambda to handle division by zero or empty values safely
+            csv_df['Split (s/500m)'] = csv_df['Speed (m/s)'].apply(lambda x: 500/x if (pd.notnull(x) and x > 0) else 0)
         
         # Display raw data snapshot
         with st.expander("📂 Raw CSV Data View (Click to expand)"):
@@ -228,136 +336,68 @@ if uploaded_csv is not None:
     except Exception as e:
         st.error(f"Error processing CSV: {e}")
 
-# 4.  --- Interactive Replay Map (Combined Data) ---
+
+# 4. --- Client Side HTML based interactive replay map ---
 
 if gpx_df is not None and csv_df is not None:
     st.markdown("---")
     st.subheader("Interactive Replay")
-    st.write("Move the map to frame the course. Drag the slider to replay. The map stays where you leave it.")
+    st.caption("This runs entirely in your browser. Drag the slider for instant feedback. Click on the graph legend items to select/deselect them. If there are stationary periods at the beginning or end of your recording, trim them with the sliders to rescale the y-axes.")
 
     try:
-        # A. PREPARE DATA
-        gpx_clean = gpx_df.dropna(subset=['seconds_elapsed']).copy()
-        csv_clean = csv_df.dropna(subset=['seconds_elapsed']).copy()
+        # Re-merge using the cached function (instant)
+        merged_df_client = merge_datasets(gpx_df, csv_df)
         
-        gpx_clean['seconds_elapsed'] = gpx_clean['seconds_elapsed'].astype(int)
-        csv_clean['seconds_elapsed'] = csv_clean['seconds_elapsed'].astype(int)
-        
-        gpx_sorted = gpx_clean.sort_values('seconds_elapsed')
-        csv_sorted = csv_clean.sort_values('seconds_elapsed')
-
-        # B. MERGE
-        merged_df = pd.merge_asof(
-            csv_sorted, 
-            gpx_sorted[['seconds_elapsed', 'latitude', 'longitude']], 
-            on='seconds_elapsed', 
-            direction='nearest',
-            tolerance=5 
-        )
-
-        merged_df = merged_df.dropna(subset=['latitude', 'longitude'])
-
-        if not merged_df.empty:
-            # C. The Slider (Based on Index for smooth playback)
-            max_index = len(merged_df) - 1
-            selected_index = st.slider("Select Point / Stroke", 0, max_index, 0)
+        if not merged_df_client.empty:
+            # Generate HTML using the imported utility function
+            replay_html = generate_client_side_replay(merged_df_client)
             
-            # Get current row
-            current_row = merged_df.iloc[selected_index]
-            
-            # D. Layout
-            col_stats, col_map = st.columns([1, 3])
-            
-            with col_stats:
-                st.markdown("### Current Stats")
-                rate = current_row.get('Rate', 0)
-                speed = current_row.get('Speed (m/s)', 0)
-                dist = current_row.get('Distance', 0)
-                time_str = current_row.get('Elapsed Time', '00:00')
-
-                st.metric("Rate (SPM)", f"{rate}")
-                st.metric("Speed (m/s)", f"{speed}")
-                st.metric("Distance", f"{dist} m")
-                st.caption(f"Time: {time_str}")
-
-            with col_map:
-                # --- MAP GENERATION ---
-                
-                # 1. Determine Zoom/Center (Persist User State)
-                min_lat, max_lat = gpx_df['latitude'].min(), gpx_df['latitude'].max()
-                min_lon, max_lon = gpx_df['longitude'].min(), gpx_df['longitude'].max()
-                default_center = [(min_lat + max_lat) / 2, (min_lon + max_lon) / 2]
-                default_zoom = 14
-                
-                map_state = st.session_state.get("interactive_map", {})
-                
-                if map_state and "center" in map_state and "zoom" in map_state:
-                    center_to_use = [map_state["center"]["lat"], map_state["center"]["lng"]]
-                    zoom_to_use = map_state["zoom"]
-                    should_fit_bounds = False 
-                else:
-                    center_to_use = default_center
-                    zoom_to_use = default_zoom
-                    should_fit_bounds = True
-                
-                m_interactive = folium.Map(location=center_to_use, zoom_start=zoom_to_use)
-
-                if should_fit_bounds:
-                     sw = [min_lat, min_lon]
-                     ne = [max_lat, max_lon]
-                     m_interactive.fit_bounds([sw, ne])
-
-                # 2. Draw Full Route in RED (This represents "Untravelled" background)
-                folium.PolyLine(
-                    list(zip(gpx_df['latitude'], gpx_df['longitude'])), 
-                    color="red", weight=3, opacity=0.6, tooltip="Untravelled"
-                ).add_to(m_interactive)
-
-                # 3. Draw Travelled Route in BLUE (Overlays the red line)
-                current_time_sec = current_row['seconds_elapsed']
-                path_so_far = gpx_df[gpx_df['seconds_elapsed'] <= current_time_sec]
-                if not path_so_far.empty:
-                    folium.PolyLine(
-                        list(zip(path_so_far['latitude'], path_so_far['longitude'])), 
-                        color="blue", weight=4, opacity=1, tooltip="Travelled"
-                    ).add_to(m_interactive)
-
-                # 4. Boat Dot (Added black border so it pops against the red line)
-                boat_loc = [current_row['latitude'], current_row['longitude']]
-                folium.CircleMarker(
-                    location=boat_loc, 
-                    radius=8, 
-                    color="black",      # Stroke color (contrast)
-                    weight=1,           # Stroke width
-                    fill=True, 
-                    fill_color="red",   # Fill color
-                    fill_opacity=1
-                ).add_to(m_interactive)
-
-                st_folium(m_interactive, width=800, height=500, key="interactive_map")
+            # Render the HTML component
+            components.html(replay_html, height=520)
         else:
-            st.warning("Could not link CSV and GPX data. Please check if the timestamps align.")
-            
-    except Exception as e:
-        st.error(f"Error in interactive section: {e}")
+            st.warning("Data could not be merged for the client-side view.")
 
-# 6. --- Audio Analysis Section ---
+    except Exception as e:
+        st.error(f"Error in client-side section: {e}")
+        
+
+# 5. --- Audio Analysis Section ---
 st.markdown("---")
-st.header("Audio Analysis - UNDER CONSTRUCTION")
+st.header("Audio Analysis")
 st.write("Upload an audio recording (e.g., Cox recording) to play it in sync with the map.")
 
-#uploaded_audio = st.file_uploader("Upload Audio File (MP3/WAV)", type=['mp3', 'wav', 'm4a', 'ogg'])
+uploaded_audio = st.file_uploader("Upload Audio File (MP3/WAV)", type=['mp3', 'wav', 'm4a', 'ogg'])
 
-#if gpx_df is not None and uploaded_audio is not None:
-#    st.write("Loading audio player and map sync...")
+if gpx_df is not None and uploaded_audio is not None:
+    st.write("Loading audio player and map sync...")
     
-#    if 'seconds_elapsed' in gpx_df.columns:
-        # Calls the function from utils.py
-#        audio_html = generate_audio_map_html(gpx_df, uploaded_audio.getvalue(), uploaded_audio.type)
-#        components.html(audio_html, height=550)
-#    else:
-#        st.error("GPX data does not have time info required for sync.")
+    if 'seconds_elapsed' in gpx_df.columns:
+        # Prepare the data for Audio Sync
+        if csv_df is not None:
+            # If CSV exists, merge stats ONTO the GPX data.
+            # We use merge_asof with GPX as the left table to keep the high-frequency map points (1Hz)
+            # while pulling in the closest available stats from the CSV.
+            
+            # Ensure types match
+            gpx_df['seconds_elapsed'] = gpx_df['seconds_elapsed'].astype(int)
+            csv_df['seconds_elapsed'] = csv_df['seconds_elapsed'].astype(int)
+            
+            audio_data = pd.merge_asof(
+                gpx_df.sort_values('seconds_elapsed'),
+                csv_df.sort_values('seconds_elapsed'),
+                on='seconds_elapsed',
+                direction='nearest',
+                tolerance=5
+            )
+        else:
+            # If no CSV, just use the GPX data (stats will show as "--")
+            audio_data = gpx_df
 
+        # Generate HTML
+        audio_html = generate_audio_map_html(audio_data, uploaded_audio.getvalue(), uploaded_audio.type)
+        components.html(audio_html, height=600) # Increased height to fit stats + map + player
+    else:
+        st.error("GPX data does not have time info required for sync.")
 
 # 5. Compare Two GPX Lines ---
 
@@ -441,7 +481,7 @@ if tracks_to_plot:
 # 6. Feedback Part on the Bottom of the page:
 st.markdown("---")  # Horizontal rule for visual separation
 
-# 5.1. Developer Credits
+# 6.1. Developer Credits
 st.markdown(
     """
     <div style='text-align: center; color: grey;'>
@@ -455,7 +495,7 @@ st.markdown(
 st.header("Contact & Feedback")
 st.write("Have suggestions? Send a message directly using the form below.")
 
-# 5.2. Contact Form
+# 6.2. Contact Form
 with st.form("contact_form", clear_on_submit=True):
     # Layout the input fields
     col1, col2 = st.columns(2)
