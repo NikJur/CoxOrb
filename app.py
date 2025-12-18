@@ -289,6 +289,8 @@ gpx_df = None
 csv_df = None
 gpx_bytes = None
 csv_file = None
+audio_bytes = None # Added for audio
+audio_type = 'audio/m4a' # Default for demo
 
 # 4. Logic: Either Load Demo Data OR Show Uploaders
 if demo_mode:
@@ -296,16 +298,24 @@ if demo_mode:
     try:
         gpx_url = "https://raw.githubusercontent.com/NikJur/CoxOrb/refs/heads/main/demo_data/example.GPX"
         csv_url = "https://raw.githubusercontent.com/NikJur/CoxOrb/refs/heads/main/demo_data/example_GRAPH.CSV"
+        audio_url = "https://raw.githubusercontent.com/NikJur/CoxOrb/refs/heads/main/demo_data/example_recording.m4a"
         
         with st.spinner("Downloading demo data..."):
             gpx_response = requests.get(gpx_url)
             csv_response = requests.get(csv_url)
+            audio_r = requests.get(audio_url)
             
             if gpx_response.status_code == 200 and csv_response.status_code == 200:
+                # GPX
                 gpx_bytes = gpx_response.content
+                #CSV
                 # For CSV, we need a file-like object for pandas
                 from io import StringIO
                 csv_file = StringIO(csv_response.text)
+                # AUDIO
+                if audio_r.status_code == 200:
+                    audio_bytes = audio_r.content
+                    
                 st.success("Demo data loaded successfully!")
             else:
                 st.error("Could not download demo files from GitHub. Please check the URLs.")
@@ -416,11 +426,20 @@ if gpx_df is not None and csv_df is not None:
 # 5. --- Audio Analysis Section ---
 st.markdown("---")
 st.header("Audio Analysis")
-st.write("Upload an audio recording (e.g., Cox recording) to play it in sync with the map.")
 
-uploaded_audio = st.file_uploader("Upload Audio File (MP3/WAV)", type=['mp3', 'wav', 'm4a', 'ogg'])
+# if NOT in demo mode (or demo download failed), allow upload
+if audio_bytes is None:
+    st.write("Upload an audio recording (e.g., Cox recording) to play it in sync with the map.")
+    uploaded_audio = st.file_uploader("Upload Audio File (MP3/WAV/M4A)", type=['mp3', 'wav', 'm4a', 'ogg'])
+    
+    if uploaded_audio:
+        audio_bytes = uploaded_audio.getvalue()
+        audio_type = uploaded_audio.type
+else:
+    st.write("Playing loaded audio in sync with the map.")
 
-if gpx_df is not None and uploaded_audio is not None:
+# Process Audio Logic
+if gpx_df is not None and audio_bytes is not None:
     st.write("Loading audio player and map sync...")
     
     if 'seconds_elapsed' in gpx_df.columns:
@@ -429,7 +448,8 @@ if gpx_df is not None and uploaded_audio is not None:
             # If CSV exists, merge stats ONTO the GPX data.
             # We use merge_asof with GPX as the left table to keep the high-frequency map points (1Hz)
             # while pulling in the closest available stats from the CSV.
-            
+
+            # Merge stats onto GPX
             # Ensure types match
             gpx_df['seconds_elapsed'] = gpx_df['seconds_elapsed'].astype(int)
             csv_df['seconds_elapsed'] = csv_df['seconds_elapsed'].astype(int)
