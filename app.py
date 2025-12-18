@@ -319,8 +319,15 @@ else:
     uploaded_gpx = c1.file_uploader("Upload GPX", type=['gpx'])
     uploaded_csv = c2.file_uploader("Upload CSV", type=['csv'])
 
+    # If user uploaded, populate the unified variables
+    if uploaded_gpx is not None:
+        gpx_bytes = uploaded_gpx.getvalue()
+        
+    if uploaded_csv is not None:
+        csv_file = uploaded_csv
+
 # 2. Process and Plot GPX (Map + Raw View)
-if uploaded_gpx is not None:
+if gpx_bytes is not None:
     try:
         # Parse the GPX file
         gpx_df = parse_gpx(uploaded_gpx)
@@ -350,7 +357,7 @@ if uploaded_gpx is not None:
         st.error(f"Error processing GPX: {e}")
 
 # 3. Process and Plot CSV (Stats)
-if uploaded_csv is not None:
+if csv_file is not None:
     try:
         # Load CSV into Pandas DataFrame
         # header=1 tells pandas to ignore the first row ("COXORB Performance Data...") and use the second row as the actual column headers.
