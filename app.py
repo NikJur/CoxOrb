@@ -295,9 +295,8 @@ csv_file = None
 if demo_mode:
     # --- DEMO MODE ---
     try:
-        # REPLACE THESE URLs with your actual raw GitHub URLs
-        gpx_url = "https://raw.githubusercontent.com/NikJur/coxorb-visualiser/main/demo_data/example.gpx"
-        csv_url = "https://raw.githubusercontent.com/NikJur/coxorb-visualiser/main/demo_data/example.csv"
+        gpx_url = "https://raw.githubusercontent.com/NikJur/CoxOrb/refs/heads/main/demo_data/example.GPX"
+        csv_url = "https://raw.githubusercontent.com/NikJur/CoxOrb/refs/heads/main/demo_data/example_GRAPH.CSV"
         
         with st.spinner("Downloading demo data..."):
             gpx_response = requests.get(gpx_url)
