@@ -330,7 +330,7 @@ else:
 if gpx_bytes is not None:
     try:
         # Parse the GPX file
-        gpx_df = parse_gpx(uploaded_gpx)
+        gpx_df = parse_gpx(gpx_bytes)
 
         st.subheader("Rowing Route")
         
@@ -359,9 +359,11 @@ if gpx_bytes is not None:
 # 3. Process and Plot CSV (Stats)
 if csv_file is not None:
     try:
+        # Reset pointer if it's a StringIO object from demo
+        if hasattr(csv_file, 'seek'): csv_file.seek(0)
         # Load CSV into Pandas DataFrame
         # header=1 tells pandas to ignore the first row ("COXORB Performance Data...") and use the second row as the actual column headers.
-        csv_df = pd.read_csv(uploaded_csv, header=1)
+        csv_df = pd.read_csv(csv_file, header=1)
 
         # Clean column names
         csv_df.columns = [c.strip() for c in csv_df.columns]
