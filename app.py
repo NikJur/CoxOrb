@@ -263,8 +263,27 @@ c1, c2, c3 = st.columns([1, 2, 1])
 with c2:
     # Use the logo as the main title
     st.image("logo.png", use_container_width=True)
-    
-st.write("Upload your rowing data to view the route and analysis. Upload both GPX and CSV files to enable the interactive slider replay.")
+
+# 1. Handle Query Parameters for Demo Mode
+# We check if the user clicked the link (URL has ?demo=true)
+query_params = st.query_params
+demo_mode = query_params.get("demo") == "true"
+
+# 2. Display Intro Text with Link
+if not demo_mode:
+    st.markdown(
+        """
+        Upload your rowing data to view the route and analysis. 
+        Upload both GPX and CSV files to enable the interactive slider replay. 
+        Click **[here](?demo=true)** to access a pre-loaded example.
+        """
+    )
+else:
+    st.markdown(
+        """
+        **Viewing Demo Data.** Click **[here](?)** to return to upload mode.
+        """
+    )
 
 # 1. File Uploaders
 c1, c2 = st.columns(2)
@@ -274,6 +293,8 @@ uploaded_csv = c2.file_uploader("Upload CSV (we recommend GRAPH over SPLIT)", ty
 # Holders for dataframes so we can access them later for the combined map
 gpx_df = None
 csv_df = None
+gpx_bytes = None
+csv_file = None
 
 # 2. Process and Plot GPX (Map + Raw View)
 if uploaded_gpx is not None:
