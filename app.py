@@ -290,7 +290,7 @@ csv_df = None
 gpx_bytes = None
 csv_file = None
 audio_bytes = None # Added for audio
-audio_type = 'audio/m4a' # Default for demo
+audio_type = 'audio/mp4' # Default for demo
 
 # 4. Logic: Either Load Demo Data OR Show Uploaders
 if demo_mode:
