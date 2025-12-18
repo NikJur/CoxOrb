@@ -466,7 +466,7 @@ if gpx_df is not None and audio_bytes is not None:
             audio_data = gpx_df
 
         # Generate HTML
-        audio_html = generate_audio_map_html(audio_data, audio_bytes, audio.type)
+        audio_html = generate_audio_map_html(audio_data, audio_bytes, audio_type)
         components.html(audio_html, height=600) # Increased height to fit stats + map + player
     else:
         st.error("GPX data does not have time info required for sync.")
