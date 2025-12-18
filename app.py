@@ -90,51 +90,111 @@ def plot_metrics(df):
     Generates a line chart for rowing metrics (Rate/Speed) from CSV data.
     Sets 'Distance' as the X-axis if available.
     Allows user to select which metrics to plot.
+    Generates a Dual-Axis line chart.
+    Left Axis: Rate, Distance/Stroke, Check
+    Right Axis (Inverted): Split (formatted as mm:ss.t)
     
     Parameters:
     -----------
     df : pd.DataFrame
         The DataFrame containing CoxOrb CSV data.
     """
-    # Streamlit's native line chart is interactive by default
-    #1 Clean column names (remove extra spaces)
+    import altair as alt
+
+    # 1. Clean column names (Remove the rename logic!)
     df.columns = [c.strip() for c in df.columns]
 
-    #2 Define the exact columns we want to plot based on your file format
-    #file format: Distance, Elapsed Time, Stroke Count, Rate, Check, Speed (mm:ss/500m), Speed (m/s), Distance/Stroke
-    wanted_cols = ['Rate', 'Speed (m/s)', 'Distance/Stroke', 'Check', 'Split (s/500m)']
-    
-    #3 Filter for columns that actually exist in the file
-    cols_to_plot = [c for c in wanted_cols if c in df.columns]
+    # 2. Define Metrics (Include Speed AND Split)
+    wanted_cols = ['Rate', 'Split (s/500m)', 'Speed (m/s)', 'Distance/Stroke', 'Check']
+    available_cols = [c for c in wanted_cols if c in df.columns]
 
-    # 4. Add Multi-Select Box for User Control
-    # Default to showing all available metrics
-    cols_to_plot = st.multiselect(
-        "Select metrics to plot:", 
-        options=cols_to_plot, 
-        default=cols_to_plot
-    )
+    # 3. Create Formatted Split Column for Tooltips (mm:ss.t)
+    if 'Split (s/500m)' in df.columns:
+        def fmt_split(secs):
+            if pd.isna(secs) or secs <= 0: return "-"
+            m = int(secs // 60)
+            s = secs % 60
+            return f"{m}:{s:04.1f}"
+        
+        df['Split_Formatted'] = df['Split (s/500m)'].apply(fmt_split)
 
-    if cols_to_plot:
+    if available_cols:
         st.subheader("Performance Metrics (Static Plot)")
         
-        # If 'Distance' exists, set it as the index (X-axis)
-        if 'Distance' in df.columns:
-            st.write("X-axis: Distance (m). Graph lets you zoom-in for detailed analysis.")
-            # We explicitly set the index to Distance for the chart
-            chart_data = df.set_index('Distance')[cols_to_plot]
-            st.line_chart(chart_data)
-        
-        # If no Distance, try 'Elapsed Time'
-        elif 'Elapsed Time' in df.columns:
-            st.write("X-axis: Time")
-            chart_data = df.set_index('Elapsed Time')[cols_to_plot]
-            st.line_chart(chart_data)
+        # Default defaults: Rate and Split
+        default_cols = [c for c in available_cols if c in ['Rate', 'Split (s/500m)']]
+        if not default_cols: default_cols = available_cols[:1]
+
+        cols_to_plot = st.multiselect(
+            "Select metrics to plot:", 
+            options=available_cols, 
+            default=default_cols
+        )
+
+        if cols_to_plot:
+            # Determine X-axis
+            if 'Distance' in df.columns:
+                x_axis = 'Distance'
+                x_title = "Distance (m)"
+            elif 'Elapsed Time' in df.columns:
+                x_axis = 'Elapsed Time'
+                x_title = "Time"
+            else:
+                x_axis = 'index'
+                df = df.reset_index()
+                x_title = "Stroke Number"
+
+            # --- BUILD ALTAIR LAYERS ---
+            layers = []
             
-        # Fallback to Row Number (Stroke Count)
+            # 1. Handle "Split" (Right Axis, Inverted, Green)
+            if 'Split (s/500m)' in cols_to_plot:
+                split_layer = alt.Chart(df).mark_line(color='#2ca02c').encode(
+                    x=alt.X(x_axis, title=x_title),
+                    y=alt.Y('Split (s/500m)', 
+                            title='Split (s/500m)',
+                            scale=alt.Scale(reverse=True, zero=False), # Inverted
+                            axis=alt.Axis(orient='right', titleColor='#2ca02c')), 
+                    tooltip=[
+                        alt.Tooltip(x_axis, title=x_title),
+                        alt.Tooltip('Split_Formatted', title='Split (mm:ss.t)'),
+                        alt.Tooltip('Split (s/500m)', title='Raw Seconds')
+                    ]
+                )
+                layers.append(split_layer)
+
+            # 2. Handle Other Metrics (Left Axis - Rate, Speed, etc.)
+            # We filter out 'Split (s/500m)' so it doesn't appear on the left
+            left_metrics = [c for c in cols_to_plot if c != 'Split (s/500m)']
+            
+            if left_metrics:
+                # Melt data for left metrics
+                left_data = df[[x_axis] + left_metrics].melt(x_axis, var_name='Metric', value_name='Value')
+                
+                left_layer = alt.Chart(left_data).mark_line().encode(
+                    x=alt.X(x_axis, title=x_title),
+                    y=alt.Y('Value', title=' / '.join(left_metrics), scale=alt.Scale(zero=False)),
+                    color=alt.Color('Metric', legend=alt.Legend(orient='bottom')),
+                    tooltip=[x_axis, 'Metric', 'Value']
+                )
+                layers.append(left_layer)
+
+            if layers:
+                # Combine layers
+                combined_chart = alt.layer(*layers).resolve_scale(
+                    y='independent'
+                ).properties(
+                    height=500,
+                    width='container'
+                ).interactive()
+
+                st.altair_chart(combined_chart, use_container_width=True)
+            else:
+                st.info("Please select a metric.")
         else:
-            st.write("X-axis: Stroke Number")
-            st.line_chart(df[cols_to_plot])
+            st.info("Select at least one metric to view the plot.")
+    else:
+        st.warning("Could not identify standard CoxOrb columns for the graph.")
 
 def send_simple_email(name, email, subject, message):
     """
