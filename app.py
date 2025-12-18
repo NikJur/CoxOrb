@@ -122,11 +122,11 @@ def plot_metrics(df):
         st.subheader("Performance Metrics (Static Plot)")
         
         # Default defaults: Rate and Split
-        default_cols = [c for c in available_cols if c in ['Rate', 'Split (s/500m)']]
+        default_cols = [c for c in available_cols]
         if not default_cols: default_cols = available_cols[:1]
 
         cols_to_plot = st.multiselect(
-            "Select metrics to plot (unselect "Splits" to alter the left Y-axis):", 
+            "Select metrics to plot (unselect Splits to alter the left Y-axis):", 
             options=available_cols, 
             default=default_cols
         )
