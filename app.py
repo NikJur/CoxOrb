@@ -126,7 +126,7 @@ def plot_metrics(df):
         if not default_cols: default_cols = available_cols[:1]
 
         cols_to_plot = st.multiselect(
-            "Select metrics to plot:", 
+            "Select metrics to plot (unselect "Splits" to alter the left Y-axis):", 
             options=available_cols, 
             default=default_cols
         )
