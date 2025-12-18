@@ -216,8 +216,7 @@ def send_simple_email(name, email, subject, message):
     int
         The HTTP status code of the request (200 indicates success).
     """
-    # Replace 'YOUR_FORMSPREE_ENDPOINT' below with your actual URL
-    # Example format: "https://formspree.io/f/xyzkqwe"
+
     api_url = "https://formspree.io/f/xpwvvnkn"
 
     payload = {
@@ -275,7 +274,7 @@ if not demo_mode:
         """
         Upload your rowing data to view the route and analysis. 
         Upload both GPX and CSV files to enable the interactive slider replay. 
-        Click **[here](?demo=true)** to access a pre-loaded example.
+        Click **[here](?demo=true)** to access a pre-loaded **example**.
         """
     )
 else:
