@@ -291,6 +291,7 @@ gpx_bytes = None
 csv_file = None
 audio_bytes = None # Added for audio
 audio_type = 'audio/mp4' # Default for demo
+comp_gpx_bytes = None # For comparison demo
 
 # 4. Logic: Either Load Demo Data OR Show Uploaders
 if demo_mode:
@@ -299,11 +300,13 @@ if demo_mode:
         gpx_url = "https://raw.githubusercontent.com/NikJur/CoxOrb/refs/heads/main/demo_data/example.GPX"
         csv_url = "https://raw.githubusercontent.com/NikJur/CoxOrb/refs/heads/main/demo_data/example_GRAPH.CSV"
         audio_url = "https://github.com/NikJur/CoxOrb/raw/refs/heads/main/demo_data/example_recording.m4a"
+        gpx_url = "https://raw.githubusercontent.com/NikJur/CoxOrb/refs/heads/main/demo_data/example_comparison.GPX"
         
         with st.spinner("Downloading demo data..."):
             gpx_response = requests.get(gpx_url)
             csv_response = requests.get(csv_url)
             audio_r = requests.get(audio_url)
+            comp_r = requests.get(comp_url)
             
             if gpx_response.status_code == 200 and csv_response.status_code == 200:
                 # GPX
@@ -315,6 +318,8 @@ if demo_mode:
                 # AUDIO
                 if audio_r.status_code == 200:
                     audio_bytes = audio_r.content
+                    
+                if comp_r.status_code == 200: comp_gpx_bytes = comp_r.content
                     
                 st.success("Demo data loaded successfully!")
             else:
@@ -475,57 +480,53 @@ if gpx_df is not None and audio_bytes is not None:
 
 st.markdown("---")
 st.header("Compare GPX Lines")
-st.write("Upload up to three different GPX files to compare their steering lines side-by-side.")
-
-# Create 3 columns for uploaders
-col_comp1, col_comp2, col_comp3 = st.columns(3)
-comp_gpx_1 = col_comp1.file_uploader("Upload Track 1 (Blue)", type=['gpx'], key="comp1")
-comp_gpx_2 = col_comp2.file_uploader("Upload Track 2 (Red)", type=['gpx'], key="comp2")
-comp_gpx_3 = col_comp3.file_uploader("Upload Track 3 (Black)", type=['gpx'], key="comp3")
 
 # List to store successfully parsed tracks
 tracks_to_plot = []
 
-# Parse available files
-if comp_gpx_1:
-    try:
-        tracks_to_plot.append({'data': parse_gpx(comp_gpx_1), 'color': 'blue', 'name': 'Track 1'})
-    except Exception as e:
-        st.error(f"Error parsing Track 1: {e}")
+if demo_mode:
+    # --- DEMO COMPARISON LOGIC ---
+    st.info("Demo Mode: Showing comparison between 'Demo Track' (Blue) and 'Comparison Track' (Red)")
+    
+    # 1. Use the main GPX loaded earlier
+    if gpx_bytes:
+        try: tracks_to_plot.append({'data': parse_gpx(gpx_bytes), 'color': 'blue', 'name': 'Demo Track 1'})
+        except: pass
+        
+    # 2. Use the comparison GPX downloaded in the demo block
+    if comp_gpx_bytes:
+        try: tracks_to_plot.append({'data': parse_gpx(comp_gpx_bytes), 'color': 'red', 'name': 'Comparison Track'})
+        except: pass
 
-if comp_gpx_2:
-    try:
-        tracks_to_plot.append({'data': parse_gpx(comp_gpx_2), 'color': 'red', 'name': 'Track 2'})
-    except Exception as e:
-        st.error(f"Error parsing Track 2: {e}")
+else:
+    # --- UPLOAD COMPARISON LOGIC ---
+    st.write("Upload up to three different GPX files to compare their steering lines.")
+    col1, col2, col3 = st.columns(3)
+    comp_1 = col1.file_uploader("Upload Track 1 (Blue)", type=['gpx'], key="comp1")
+    comp_2 = col2.file_uploader("Upload Track 2 (Red)", type=['gpx'], key="comp2")
+    comp_3 = col3.file_uploader("Upload Track 3 (Black)", type=['gpx'], key="comp3")
 
-if comp_gpx_3:
-    try:
-        tracks_to_plot.append({'data': parse_gpx(comp_gpx_3), 'color': 'black', 'name': 'Track 3'})
-    except Exception as e:
-        st.error(f"Error parsing Track 3: {e}")
+    if comp_1:
+        try: tracks_to_plot.append({'data': parse_gpx(comp_1.getvalue()), 'color': 'blue', 'name': 'Track 1'})
+        except Exception as e: st.error(f"Error Track 1: {e}")
+    if comp_2:
+        try: tracks_to_plot.append({'data': parse_gpx(comp_2.getvalue()), 'color': 'red', 'name': 'Track 2'})
+        except Exception as e: st.error(f"Error Track 2: {e}")
+    if comp_3:
+        try: tracks_to_plot.append({'data': parse_gpx(comp_3.getvalue()), 'color': 'black', 'name': 'Track 3'})
+        except Exception as e: st.error(f"Error Track 3: {e}")
 
+# Common plotting logic for both modes
 if tracks_to_plot:
     try:
-        # Calculate combined bounds for all uploaded tracks
-        # We concatenate all latitude series and all longitude series to find absolute min/max
         all_lats = pd.concat([t['data']['latitude'] for t in tracks_to_plot])
         all_lons = pd.concat([t['data']['longitude'] for t in tracks_to_plot])
+        sw, ne = [all_lats.min(), all_lons.min()], [all_lats.max(), all_lons.max()]
         
-        min_lat, max_lat = all_lats.min(), all_lats.max()
-        min_lon, max_lon = all_lons.min(), all_lons.max()
-        
-        sw = [min_lat, min_lon]
-        ne = [max_lat, max_lon]
-        
-        # Create Map centered roughly in the middle
-        m_compare = folium.Map(location=[(min_lat + max_lat)/2, (min_lon + max_lon)/2], zoom_start=13)
+        m_compare = folium.Map(location=[(sw[0]+ne[0])/2, (sw[1]+ne[1])/2], zoom_start=13)
         m_compare.fit_bounds([sw, ne])
-
-        # Add Fullscreen Button
         Fullscreen().add_to(m_compare)
         
-        # Plot each track
         for track in tracks_to_plot:
             folium.PolyLine(
                 list(zip(track['data']['latitude'], track['data']['longitude'])), 
@@ -534,18 +535,11 @@ if tracks_to_plot:
         
         st_folium(m_compare, width=1200, height=500, key="compare_map")
         
-        # Dynamic Legend
-        st.markdown(
-            """
-            <div style="display: flex; gap: 20px; justify-content: center; margin-top: 10px;">
-                <span style="color: blue; font-weight: bold;">■ Track 1 (Blue)</span>
-                <span style="color: red; font-weight: bold;">■ Track 2 (Red)</span>
-                <span style="color: black; font-weight: bold;">■ Track 3 (Black)</span>
-            </div>
-            """, 
-            unsafe_allow_html=True
-        )
-
+        st.markdown("""<div style="display: flex; gap: 20px; justify-content: center; margin-top: 10px;">
+            <span style="color: blue; font-weight: bold;">■ Track 1</span>
+            <span style="color: red; font-weight: bold;">■ Track 2</span>
+            <span style="color: black; font-weight: bold;">■ Track 3</span>
+        </div>""", unsafe_allow_html=True)
     except Exception as e:
         st.error(f"Error processing comparison map: {e}")
 
