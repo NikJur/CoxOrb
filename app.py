@@ -300,7 +300,7 @@ if demo_mode:
         gpx_url = "https://raw.githubusercontent.com/NikJur/CoxOrb/refs/heads/main/demo_data/example.GPX"
         csv_url = "https://raw.githubusercontent.com/NikJur/CoxOrb/refs/heads/main/demo_data/example_GRAPH.CSV"
         audio_url = "https://github.com/NikJur/CoxOrb/raw/refs/heads/main/demo_data/example_recording.m4a"
-        gpx_url = "https://raw.githubusercontent.com/NikJur/CoxOrb/refs/heads/main/demo_data/example_comparison.gpx"
+        comp_url = "https://raw.githubusercontent.com/NikJur/CoxOrb/refs/heads/main/demo_data/example_comparison.gpx"
         
         with st.spinner("Downloading demo data..."):
             gpx_response = requests.get(gpx_url)
