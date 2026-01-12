@@ -216,8 +216,7 @@ def send_simple_email(name, email, subject, message):
     int
         The HTTP status code of the request (200 indicates success).
     """
-    # Replace 'YOUR_FORMSPREE_ENDPOINT' below with your actual URL
-    # Example format: "https://formspree.io/f/xyzkqwe"
+
     api_url = "https://formspree.io/f/xpwvvnkn"
 
     payload = {
@@ -263,23 +262,89 @@ c1, c2, c3 = st.columns([1, 2, 1])
 with c2:
     # Use the logo as the main title
     st.image("logo.png", use_container_width=True)
-    
-st.write("Upload your rowing data to view the route and analysis. Upload both GPX and CSV files to enable the interactive slider replay.")
 
-# 1. File Uploaders
-c1, c2 = st.columns(2)
-uploaded_gpx = c1.file_uploader("Upload GPX", type=['gpx'])
-uploaded_csv = c2.file_uploader("Upload CSV (we recommend GRAPH over SPLIT)", type=['csv'])
+# 1. Handle Query Parameters for Demo Mode
+# We check if the user clicked the link (URL has ?demo=true)
+query_params = st.query_params
+demo_mode = query_params.get("demo") == "true"
+
+# 2. Display Intro Text with Link
+if not demo_mode:
+    st.markdown(
+        """
+        Upload your rowing data to view the route and analysis. 
+        Upload both GPX and CSV files to enable the interactive slider replay. 
+        Click **[here](?demo=true)** to access a pre-loaded *example*.
+        """
+    )
+else:
+    st.markdown(
+        """
+        **Viewing Demo Data.** Click **[here](?)** to return to upload mode.
+        """
+    )
 
 # Holders for dataframes so we can access them later for the combined map
 gpx_df = None
 csv_df = None
+gpx_bytes = None
+csv_file = None
+audio_bytes = None # Added for audio
+audio_type = 'audio/mp4' # Default for demo
+comp_gpx_bytes = None # For comparison demo
+
+# 4. Logic: Either Load Demo Data OR Show Uploaders
+if demo_mode:
+    # --- DEMO MODE ---
+    try:
+        gpx_url = "https://raw.githubusercontent.com/NikJur/CoxOrb/refs/heads/main/demo_data/example.GPX"
+        csv_url = "https://raw.githubusercontent.com/NikJur/CoxOrb/refs/heads/main/demo_data/example_GRAPH.CSV"
+        audio_url = "https://github.com/NikJur/CoxOrb/raw/refs/heads/main/demo_data/example_recording.m4a"
+        comp_url = "https://raw.githubusercontent.com/NikJur/CoxOrb/refs/heads/main/demo_data/example_comparison.gpx"
+        
+        with st.spinner("Downloading demo data..."):
+            gpx_response = requests.get(gpx_url)
+            csv_response = requests.get(csv_url)
+            audio_r = requests.get(audio_url)
+            comp_r = requests.get(comp_url)
+            
+            if gpx_response.status_code == 200 and csv_response.status_code == 200:
+                # GPX
+                gpx_bytes = gpx_response.content
+                #CSV
+                # For CSV, we need a file-like object for pandas
+                from io import StringIO
+                csv_file = StringIO(csv_response.text)
+                # AUDIO
+                if audio_r.status_code == 200:
+                    audio_bytes = audio_r.content
+                    
+                if comp_r.status_code == 200: comp_gpx_bytes = comp_r.content
+                    
+                st.success("Demo data loaded successfully!")
+            else:
+                st.error("Could not download demo files from GitHub. Please check the URLs.")
+    except Exception as e:
+        st.error(f"Error loading demo: {e}")
+
+else:
+    # --- UPLOAD MODE ---
+    c1, c2 = st.columns(2)
+    uploaded_gpx = c1.file_uploader("Upload GPX", type=['gpx'])
+    uploaded_csv = c2.file_uploader("Upload CSV", type=['csv'])
+
+    # If user uploaded, populate the unified variables
+    if uploaded_gpx is not None:
+        gpx_bytes = uploaded_gpx.getvalue()
+        
+    if uploaded_csv is not None:
+        csv_file = uploaded_csv
 
 # 2. Process and Plot GPX (Map + Raw View)
-if uploaded_gpx is not None:
+if gpx_bytes is not None:
     try:
         # Parse the GPX file
-        gpx_df = parse_gpx(uploaded_gpx)
+        gpx_df = parse_gpx(gpx_bytes)
 
         st.subheader("Rowing Route")
         
@@ -306,11 +371,13 @@ if uploaded_gpx is not None:
         st.error(f"Error processing GPX: {e}")
 
 # 3. Process and Plot CSV (Stats)
-if uploaded_csv is not None:
+if csv_file is not None:
     try:
+        # Reset pointer if it's a StringIO object from demo
+        if hasattr(csv_file, 'seek'): csv_file.seek(0)
         # Load CSV into Pandas DataFrame
         # header=1 tells pandas to ignore the first row ("COXORB Performance Data...") and use the second row as the actual column headers.
-        csv_df = pd.read_csv(uploaded_csv, header=1)
+        csv_df = pd.read_csv(csv_file, header=1)
 
         # Clean column names
         csv_df.columns = [c.strip() for c in csv_df.columns]
@@ -364,11 +431,20 @@ if gpx_df is not None and csv_df is not None:
 # 5. --- Audio Analysis Section ---
 st.markdown("---")
 st.header("Audio Analysis")
-st.write("Upload an audio recording (e.g., Cox recording) to play it in sync with the map.")
 
-uploaded_audio = st.file_uploader("Upload Audio File (MP3/WAV)", type=['mp3', 'wav', 'm4a', 'ogg'])
+# if NOT in demo mode (or demo download failed), allow upload
+if audio_bytes is None:
+    st.write("Upload an audio recording (e.g., Cox recording) to play it in sync with the map.")
+    uploaded_audio = st.file_uploader("Upload Audio File (MP3/WAV/M4A)", type=['mp3', 'wav', 'm4a', 'ogg'])
+    
+    if uploaded_audio:
+        audio_bytes = uploaded_audio.getvalue()
+        audio_type = uploaded_audio.type
+else:
+    st.write("Playing loaded audio in sync with the map.")
 
-if gpx_df is not None and uploaded_audio is not None:
+# Process Audio Logic
+if gpx_df is not None and audio_bytes is not None:
     st.write("Loading audio player and map sync...")
     
     if 'seconds_elapsed' in gpx_df.columns:
@@ -377,7 +453,8 @@ if gpx_df is not None and uploaded_audio is not None:
             # If CSV exists, merge stats ONTO the GPX data.
             # We use merge_asof with GPX as the left table to keep the high-frequency map points (1Hz)
             # while pulling in the closest available stats from the CSV.
-            
+
+            # Merge stats onto GPX
             # Ensure types match
             gpx_df['seconds_elapsed'] = gpx_df['seconds_elapsed'].astype(int)
             csv_df['seconds_elapsed'] = csv_df['seconds_elapsed'].astype(int)
@@ -394,7 +471,7 @@ if gpx_df is not None and uploaded_audio is not None:
             audio_data = gpx_df
 
         # Generate HTML
-        audio_html = generate_audio_map_html(audio_data, uploaded_audio.getvalue(), uploaded_audio.type)
+        audio_html = generate_audio_map_html(audio_data, audio_bytes, audio_type)
         components.html(audio_html, height=600) # Increased height to fit stats + map + player
     else:
         st.error("GPX data does not have time info required for sync.")
@@ -403,57 +480,53 @@ if gpx_df is not None and uploaded_audio is not None:
 
 st.markdown("---")
 st.header("Compare GPX Lines")
-st.write("Upload up to three different GPX files to compare their steering lines side-by-side.")
-
-# Create 3 columns for uploaders
-col_comp1, col_comp2, col_comp3 = st.columns(3)
-comp_gpx_1 = col_comp1.file_uploader("Upload Track 1 (Blue)", type=['gpx'], key="comp1")
-comp_gpx_2 = col_comp2.file_uploader("Upload Track 2 (Red)", type=['gpx'], key="comp2")
-comp_gpx_3 = col_comp3.file_uploader("Upload Track 3 (Black)", type=['gpx'], key="comp3")
 
 # List to store successfully parsed tracks
 tracks_to_plot = []
 
-# Parse available files
-if comp_gpx_1:
-    try:
-        tracks_to_plot.append({'data': parse_gpx(comp_gpx_1), 'color': 'blue', 'name': 'Track 1'})
-    except Exception as e:
-        st.error(f"Error parsing Track 1: {e}")
+if demo_mode:
+    # --- DEMO COMPARISON LOGIC ---
+    st.info("Demo Mode: Showing comparison between 'Demo Track' (Blue) and 'Comparison Track' (Red)")
+    
+    # 1. Use the main GPX loaded earlier
+    if gpx_bytes:
+        try: tracks_to_plot.append({'data': parse_gpx(gpx_bytes), 'color': 'blue', 'name': 'Demo Track 1'})
+        except: pass
+        
+    # 2. Use the comparison GPX downloaded in the demo block
+    if comp_gpx_bytes:
+        try: tracks_to_plot.append({'data': parse_gpx(comp_gpx_bytes), 'color': 'red', 'name': 'Comparison Track'})
+        except: pass
 
-if comp_gpx_2:
-    try:
-        tracks_to_plot.append({'data': parse_gpx(comp_gpx_2), 'color': 'red', 'name': 'Track 2'})
-    except Exception as e:
-        st.error(f"Error parsing Track 2: {e}")
+else:
+    # --- UPLOAD COMPARISON LOGIC ---
+    st.write("Upload up to three different GPX files to compare their steering lines.")
+    col1, col2, col3 = st.columns(3)
+    comp_1 = col1.file_uploader("Upload Track 1 (Blue)", type=['gpx'], key="comp1")
+    comp_2 = col2.file_uploader("Upload Track 2 (Red)", type=['gpx'], key="comp2")
+    comp_3 = col3.file_uploader("Upload Track 3 (Black)", type=['gpx'], key="comp3")
 
-if comp_gpx_3:
-    try:
-        tracks_to_plot.append({'data': parse_gpx(comp_gpx_3), 'color': 'black', 'name': 'Track 3'})
-    except Exception as e:
-        st.error(f"Error parsing Track 3: {e}")
+    if comp_1:
+        try: tracks_to_plot.append({'data': parse_gpx(comp_1.getvalue()), 'color': 'blue', 'name': 'Track 1'})
+        except Exception as e: st.error(f"Error Track 1: {e}")
+    if comp_2:
+        try: tracks_to_plot.append({'data': parse_gpx(comp_2.getvalue()), 'color': 'red', 'name': 'Track 2'})
+        except Exception as e: st.error(f"Error Track 2: {e}")
+    if comp_3:
+        try: tracks_to_plot.append({'data': parse_gpx(comp_3.getvalue()), 'color': 'black', 'name': 'Track 3'})
+        except Exception as e: st.error(f"Error Track 3: {e}")
 
+# Common plotting logic for both modes
 if tracks_to_plot:
     try:
-        # Calculate combined bounds for all uploaded tracks
-        # We concatenate all latitude series and all longitude series to find absolute min/max
         all_lats = pd.concat([t['data']['latitude'] for t in tracks_to_plot])
         all_lons = pd.concat([t['data']['longitude'] for t in tracks_to_plot])
+        sw, ne = [all_lats.min(), all_lons.min()], [all_lats.max(), all_lons.max()]
         
-        min_lat, max_lat = all_lats.min(), all_lats.max()
-        min_lon, max_lon = all_lons.min(), all_lons.max()
-        
-        sw = [min_lat, min_lon]
-        ne = [max_lat, max_lon]
-        
-        # Create Map centered roughly in the middle
-        m_compare = folium.Map(location=[(min_lat + max_lat)/2, (min_lon + max_lon)/2], zoom_start=13)
+        m_compare = folium.Map(location=[(sw[0]+ne[0])/2, (sw[1]+ne[1])/2], zoom_start=13)
         m_compare.fit_bounds([sw, ne])
-
-        # Add Fullscreen Button
         Fullscreen().add_to(m_compare)
         
-        # Plot each track
         for track in tracks_to_plot:
             folium.PolyLine(
                 list(zip(track['data']['latitude'], track['data']['longitude'])), 
@@ -462,18 +535,11 @@ if tracks_to_plot:
         
         st_folium(m_compare, width=1200, height=500, key="compare_map")
         
-        # Dynamic Legend
-        st.markdown(
-            """
-            <div style="display: flex; gap: 20px; justify-content: center; margin-top: 10px;">
-                <span style="color: blue; font-weight: bold;">■ Track 1 (Blue)</span>
-                <span style="color: red; font-weight: bold;">■ Track 2 (Red)</span>
-                <span style="color: black; font-weight: bold;">■ Track 3 (Black)</span>
-            </div>
-            """, 
-            unsafe_allow_html=True
-        )
-
+        st.markdown("""<div style="display: flex; gap: 20px; justify-content: center; margin-top: 10px;">
+            <span style="color: blue; font-weight: bold;">■ Track 1</span>
+            <span style="color: red; font-weight: bold;">■ Track 2</span>
+            <span style="color: black; font-weight: bold;">■ Track 3</span>
+        </div>""", unsafe_allow_html=True)
     except Exception as e:
         st.error(f"Error processing comparison map: {e}")
 
