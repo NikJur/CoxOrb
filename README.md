@@ -1,6 +1,11 @@
-https://coxorb.streamlit.app/
+<div align="center">
+  <img src="logo.png" alt="CoxOrb Data Visualiser Logo" width="800">
+</div>
 
 # 🚣 CoxOrb Data Visualiser
+
+**[Access the Web Application Here](https://coxorb.streamlit.app/)**
+
 A powerful, interactive web application for visualising and analysing rowing performance data. Built with Python and Streamlit, this tool combines GPS data (GPX) and performance metrics (CSV) to provide synchronised replay maps, deep-dive performance graphs, and audio-synced analysis for coxswains and coaches.
 
 ## ✨ Key Features
@@ -12,7 +17,7 @@ Comparison Mode: Upload up to 3 different GPX tracks (e.g., different pieces or 
 ### 2. 📈 Performance Metrics
 Upload CSV files (exported from CoxOrb or similar devices) to visualise critical rowing metrics.
 
-Static Plot: High-resolution analysis.
+* Static Plot: High-resolution analysis.
 
 Metrics Supported: Stroke Rate, Split (s/500m), Speed (m/s), Distance Per Stroke, and Check.
 
@@ -33,11 +38,16 @@ Auto-Sync: The application synchronises the audio playback with the boat's posit
 Dashboard: Displays real-time stats (Rate, Split, Distance) that update as the audio plays.
 
 ### 5. 📝 Feedback
-Found a bug or have a feature request? Use the Contact & Feedback form built directly into the bottom of the application! However, if you already find yourself on this GitHub repo - you might as well open an "issue" increasing your chances of a quick fix coming your way.
+Found a bug or have a feature request? Use the Contact & Feedback form built directly into the bottom of the application! However, if you already find yourself on this GitHub repo - you might as well open an "issue", increasing your chances of a quick fix coming your way.
 
 
-------------------------------------------------------------------------------------------------------------------------------------
+---
 ### 📂 Project Structure
 app.py: The main entry point. Handles the Streamlit UI, file uploads, data parsing (GPX/CSV), caching logic, and the server-side calculations.
 
 html_utils.py: Contains the complex HTML/JavaScript generators for the interactive components (Audio Player and Client-Side Replay). This keeps the main Python file clean.
+
+---
+
+## ⭐️ Support the Project
+If this tool enhances your coxing, coaching, or rowing analysis, please consider giving this repository a star ⭐️. It costs nothing, helps track community engagement, and encourages future development and updates.
