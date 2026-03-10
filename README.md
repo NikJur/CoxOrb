@@ -49,5 +49,5 @@ html_utils.py: Contains the complex HTML/JavaScript generators for the interacti
 
 ---
 
-## ⭐️ Support the Project
-If this tool enhances your coxing, coaching, or rowing analysis, please consider giving this repository a star ⭐️. It costs nothing, helps track community engagement, and encourages future development and updates.
+## ⭐️ Support the Project (for free!)
+If this tool enhances your coxing, coaching, or rowing analyses, please consider giving this repository a star ⭐️. It costs nothing, helps track community engagement, and encourages future development and updates.
