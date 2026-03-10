@@ -4,7 +4,7 @@
 
 # 🚣 CoxOrb Data Visualiser
 
-**[Access the Web Application Here](https://coxorb.streamlit.app/)**
+**[Access the Web Application Here](https://coxorb.streamlit.app/)** (it might take a few seconds to wake up sometimes) 
 
 A powerful, interactive web application for visualising and analysing rowing performance data. Built with Python and Streamlit, this tool combines GPS data (GPX) and performance metrics (CSV) to provide synchronised replay maps, deep-dive performance graphs, and audio-synced analysis for coxswains and coaches.
 
