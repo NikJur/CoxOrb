@@ -549,7 +549,7 @@ st.header("⭐ Support the Project (for free!)")
 st.markdown(
     """
     If this tool enhances your coxing, coaching, or rowing analyses, please consider giving the 
-    **[GitHub Repository](https://github.com/NikJur/CoxOrb)** a star (you need to follow the link and select "star" rather than on the current page)! 
+    **[GitHub Repository](https://github.com/NikJur/CoxOrb)** a star (you will need to follow the link and select "star" rather than on the current page)! 
     It costs nothing, helps track community engagement, and encourages future development and updates.
     """
 )
