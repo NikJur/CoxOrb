@@ -188,7 +188,7 @@ def plot_metrics(df):
                     width='container'
                 ).interactive()
 
-                st.altair_chart(combined_chart, use_container_width=True)
+                st.altair_chart(combined_chart, width='stretch')
             else:
                 st.info("Please select a metric.")
         else:
@@ -257,11 +257,11 @@ def merge_datasets(gpx_df, csv_df):
 
 # --- Main App Logic ---
 
-# Create 3 columns: empty (1), logo (2), empty (1) to center the image
+# Create 3 columns: empty (1), logo (2), empty (1) to centre the image
 c1, c2, c3 = st.columns([1, 2, 1])
 with c2:
     # Use the logo as the main title
-    st.image("logo.png", use_container_width=True)
+    st.image("logo.png", width='stretch')
 
 # 1. Handle Query Parameters for Demo Mode
 # We check if the user clicked the link (URL has ?demo=true)
