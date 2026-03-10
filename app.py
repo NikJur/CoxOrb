@@ -545,7 +545,7 @@ if tracks_to_plot:
 
 # --- Support the Project ---
 st.markdown("---")
-st.header("⭐ Support the Project")
+st.header("⭐ Support the Project (for free!)")
 st.markdown(
     """
     If this tool enhances your coxing, coaching, or rowing analyses, please consider giving the 
