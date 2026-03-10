@@ -17,7 +17,7 @@ Comparison Mode: Upload up to 3 different GPX tracks (e.g., different pieces or 
 ### 2. 📈 Performance Metrics
 Upload CSV files (exported from CoxOrb or similar devices) to visualise critical rowing metrics.
 
-* Static Plot: High-resolution analysis.
+Static Plot: High-resolution analysis.
 
 Metrics Supported: Stroke Rate, Split (s/500m), Speed (m/s), Distance Per Stroke, and Check.
 
