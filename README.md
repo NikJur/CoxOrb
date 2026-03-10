@@ -31,3 +31,13 @@ Upload an audio recording (MP3/WAV) alongside your data.
 Auto-Sync: The application synchronises the audio playback with the boat's position on the map.
 
 Dashboard: Displays real-time stats (Rate, Split, Distance) that update as the audio plays.
+
+### 5. 📝 Feedback
+Found a bug or have a feature request? Use the Contact & Feedback form built directly into the bottom of the application! However, if you already find yourself on this GitHub repo - you might as well open an "issue" increasing your chances of a quick fix coming your way.
+
+
+------------------------------------------------------------------------------------------------------------------------------------
+### 📂 Project Structure
+app.py: The main entry point. Handles the Streamlit UI, file uploads, data parsing (GPX/CSV), caching logic, and the server-side calculations.
+
+html_utils.py: Contains the complex HTML/JavaScript generators for the interactive components (Audio Player and Client-Side Replay). This keeps the main Python file clean.
