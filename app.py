@@ -543,25 +543,24 @@ if tracks_to_plot:
     except Exception as e:
         st.error(f"Error processing comparison map: {e}")
 
+# --- Support the Project ---
+st.markdown("---")
+st.header("⭐ Support the Project")
+st.markdown(
+    """
+    If this tool enhances your coxing, coaching, or rowing analyses, please consider giving the 
+    **[GitHub Repository](https://github.com/NikJur/CoxOrb)** a star (you need to follow the link and select "star" rather than on the current page)! 
+    It costs nothing, helps track community engagement, and encourages future development and updates.
+    """
+)
 
 # 6. Feedback Part on the Bottom of the page:
 st.markdown("---")  # Horizontal rule for visual separation
 
-# 6.1. Developer Credits
-st.markdown(
-    """
-    <div style='text-align: center; color: grey;'>
-        <small>This web application is developed and maintained by 
-        <a href='https://github.com/NikJur'>NikJur (Github)</a>.</small>
-    </div>
-    """,
-    unsafe_allow_html=True
-)
-
 st.header("Contact & Feedback")
 st.write("Have suggestions? Send a message directly using the form below.")
 
-# 6.2. Contact Form
+# 6.1. Contact Form
 with st.form("contact_form", clear_on_submit=True):
     # Layout the input fields
     col1, col2 = st.columns(2)
@@ -590,3 +589,14 @@ with st.form("contact_form", clear_on_submit=True):
                 st.error(f"Failed to send. Status Code: {status}")
                 with st.expander("See Error Details"):
                     st.text(response_text)
+
+# 6.2. Developer Credits
+st.markdown(
+    """
+    <div style='text-align: center; color: grey;'>
+        <small>This web application is developed and maintained by 
+        <a href='https://github.com/NikJur'>NikJur (Github)</a>.</small>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
