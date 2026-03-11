@@ -345,9 +345,11 @@ if gpx_bytes is not None:
     try:
         # Parse the GPX file
         gpx_df = parse_gpx(gpx_bytes)
-
         st.subheader("Rowing Route")
-        
+
+        # Dynamic Map Height Slider
+        map_height = st.slider("↕️ Adjust Map Height to Screen Size", min_value=100, max_value=800, value=500, step=50, key="main_map_slider")
+
         # Center map on the starting point
         start_location = [gpx_df['latitude'].iloc[0], gpx_df['longitude'].iloc[0]]
         m = folium.Map(location=start_location, zoom_start=14)
@@ -359,9 +361,9 @@ if gpx_bytes is not None:
         # Add Fullscreen Button
         Fullscreen().add_to(m)
         
-        # Render map in Streamlit
-        st_folium(m, width=1200, height=550)
-
+        # Render map in Streamlit (Native HTML to force resize)
+        components.html(m._repr_html_(), height=map_height)
+        
         #View Raw GPX Data 
         with st.expander("📂 Raw GPX Data View (Click to expand)"):
             st.write("Here is the raw data extracted from the GPX file:")
@@ -523,6 +525,9 @@ if tracks_to_plot:
         all_lons = pd.concat([t['data']['longitude'] for t in tracks_to_plot])
         sw, ne = [all_lats.min(), all_lons.min()], [all_lats.max(), all_lons.max()]
         
+        #Dynamic Coimparison Map Height Slider
+        comp_map_height = st.slider("↕️ Adjust Map Height Size to Screen", min_value=100, max_value=800, value=500, step=50, key="comp_map_slider")
+
         m_compare = folium.Map(location=[(sw[0]+ne[0])/2, (sw[1]+ne[1])/2], zoom_start=13)
         m_compare.fit_bounds([sw, ne])
         Fullscreen().add_to(m_compare)
@@ -533,8 +538,9 @@ if tracks_to_plot:
                 color=track['color'], weight=3, opacity=0.7, tooltip=track['name']
             ).add_to(m_compare)
         
-        st_folium(m_compare, width=1200, height=500, key="compare_map")
-        
+        # Render HTML directly to force resize
+        components.html(m_compare._repr_html_(), height=comp_map_height)
+
         st.markdown("""<div style="display: flex; gap: 20px; justify-content: center; margin-top: 10px;">
             <span style="color: blue; font-weight: bold;">■ Track 1</span>
             <span style="color: red; font-weight: bold;">■ Track 2</span>
