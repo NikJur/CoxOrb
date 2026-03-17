@@ -272,10 +272,19 @@ demo_mode = query_params.get("demo") == "true"
 if not demo_mode:
     st.markdown(
         """
+        <p style="color:red; font-size:28px; font-weight:bold;">
+            For a smoother performance, we have moved to this 
+            <a href="https://nikjur.github.io/CoxOrbDataAnalyser/" target="_blank" style="color:red; text-decoration:underline;">
+                beta-version
+            </a>.
+            Not all features are supported yet, but the ones that are run much more smoothly.
+        </p>
+        
         Upload your rowing data to view the route and analysis. 
         Upload both GPX and CSV files to enable the interactive slider replay. 
         Click **[here](?demo=true)** to access a pre-loaded *example*.
-        """
+        """,
+        unsafe_allow_html=True
     )
 else:
     st.markdown(
