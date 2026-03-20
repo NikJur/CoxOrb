@@ -273,11 +273,10 @@ if not demo_mode:
     st.markdown(
         """
         <p style="color:red; font-size:28px; font-weight:bold;">
-            For a smoother performance, we have moved to this 
+            For a smoother performance, we have moved to 
             <a href="https://nikjur.github.io/CoxOrbDataAnalyser/" target="_blank" style="color:red; text-decoration:underline;">
-                beta-version
+                https://nikjur.github.io/CoxOrbDataAnalyser/
             </a>.
-            Not all features are supported yet, but the ones that are run much more smoothly.
         </p>
         
         Upload your rowing data to view the route and analysis. 
